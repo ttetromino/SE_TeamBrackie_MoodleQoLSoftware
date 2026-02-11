@@ -27,3 +27,4 @@ To address the risk of credential theft, the architecture applies a strict "Loca
 
 * No External Database: Unlike traditional web apps, this system does not maintain a centralized database for student data.
 * Encryption: All sensitive academic records are encrypted and stored solely within the user's browser environment. This minimizes the attack surface and ensures compliance with the Philippine Data Privacy Act (RA10173).
+*
