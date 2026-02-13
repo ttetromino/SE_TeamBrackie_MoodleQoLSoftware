@@ -18,6 +18,12 @@ The following diagram illustrates the interaction between the Moodle+ components
 * **Local Storage**: Stores encrypted student records and course content locally to ensure privacy and offline access.
 * **Data Flow**: Moodle Server > Web Extension (Bridge) > Local Cache > Website Application > UI Components.
 
+### Non-Functional Requirements
+* **Performance:** All computations such as GWA calculation, analytics, and task prioritization are executed locally to ensure fast response times and minimal latency.
+* **Reliability & Availability:** The offline-first design ensures that core features remain accessible even during Moodle downtime or unstable network connections.
+* **Scalability:** Since the system does not rely on centralized servers, it scales naturally with the number of users without increasing infrastructure load.
+* **Maintainability:** The modular architecture allows individual components (scraper, analytics engine, UI) to be updated independently.
+
 ## Design Principles Applied
 1. *Separation of Concerns (SoC)*
 
