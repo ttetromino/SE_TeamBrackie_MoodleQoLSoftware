@@ -28,3 +28,6 @@ To address the risk of credential theft, the architecture applies a strict "Loca
 * No External Database: Unlike traditional web apps, this system does not maintain a centralized database for student data.
 * Encryption: All sensitive academic records are encrypted and stored solely within the user's browser environment. This minimizes the attack surface and ensures compliance with the Philippine Data Privacy Act (RA10173).
 
+## Short Summary
+
+In short, the system follows a client-side architecture built on a client-server model. Most logic will run locally in the user's browser extension or mobile app using an offline-first approach with local encrypted storage. A Web Extension Bridge will fetch data from the UPHSL Moodle while enforcing local-only, encrypted data policy, protecting student privacy in compliance with the Philippine Data Privacy Act (RA 10173).
