@@ -8,7 +8,7 @@ The system utilizes a **Client-Server** foundation but operates primarily as a T
 ## High-Level Architecture Diagram
 The following diagram illustrates the interaction between the Moodle+ components and the existing UPHSL Moodle infrastructure.
 
-![alt text](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/b678dba1763480a00820ca275ea423c3de119e30/docs/architecture/DIAGRAM.png)
+![alt text](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/docs/architecture/DIAGRAM.png)
 
 ### Major Components & Data Flow:
 * **Moodle+ Web Extension/App**: The primary interface where users interact with the Dashboard and Task Management tools.
