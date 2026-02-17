@@ -31,6 +31,7 @@ The team has strictly separated the Data Acquisition layer from the Presentation
 
 2. *Security by Design (Local-Only Policy)*
 
+
 To address the risk of credential theft, the architecture applies a strict "Local-Only" data principle.
 
 * No External Database: Unlike traditional web apps, this system does not maintain a centralized database for student data.
