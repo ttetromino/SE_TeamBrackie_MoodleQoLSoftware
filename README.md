@@ -2,11 +2,11 @@
 **Moodle+** is a web extension and application to enhance the productivity and well-being of students. It addresses Moodle LMS limitations such as slow server response and lack of integrated planning tools.
 
 ## Features of the Program
-**1. Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
-**2. Account / Credentials Editing**: The program will allow for users to edit their credentials (emails, passwords).
-**3. Course Enrollment**: This feature will allow users to enroll into courses on their own.
-**4. Adding Course Items**: This feature allows users to add their own course items for easier and more accessible tracking.
-**5. Dashboard**: This is for easier navigation and access to information such as different enrolled subjects.
+* **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
+* **Account / Credentials Editing**: The program will allow for users to edit their credentials (emails, passwords).
+* **Course Enrollment**: This feature will allow users to enroll into courses on their own.
+* **Adding Course Items**: This feature allows users to add their own course items for easier and more accessible tracking.
+* **Dashboard**: This is for easier navigation and access to information such as different enrolled subjects.
 
 
 ## Architectural Style: Hybrid Client-Side Architecture
