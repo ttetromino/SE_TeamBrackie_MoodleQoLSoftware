@@ -1,7 +1,14 @@
 # MoodlePlus
 **Moodle+** is a web extension and application to enhance the productivity and well-being of students. It addresses Moodle LMS limitations such as slow server response and lack of integrated planning tools.
 
-## Technical Architecture
+## Features of the Program
+**1. Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
+**2. Account / Credentials Editing**: The program will allow for users to edit their credentials (emails, passwords).
+**3. Course Enrollment**: This feature will allow users to enroll into courses on their own.
+**4. Adding Course Items**: This feature allows users to add their own course items for easier and more accessible tracking.
+**5. Dashboard**: This is for easier navigation and access to information such as different enrolled subjects.
+
+
 ## Architectural Style: Hybrid Client-Side Architecture
 The system utilizes a **Client-Server** foundation but operates primarily as a Thick Client / Edge-heavy architecture.
 
@@ -29,7 +36,7 @@ The following diagram illustrates the interaction between the Moodle+ components
 * **Maintainability:** The modular architecture allows individual components (scraper, UI) to be updated independently.
 
 
-## Security & Privacy
+### Security & Privacy
 * **Local-Only Policy**: No external database is used for student credential or records.
 * **Transparency**: A "Terms of Use" modal is required upon installation to ensure explicit data processing consent.
 * **Performance**: Designed to run smoothly on low-end devices by offloading processing from the server to the client.
