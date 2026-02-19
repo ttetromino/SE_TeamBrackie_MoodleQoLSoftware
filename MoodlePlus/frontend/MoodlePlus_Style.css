@@ -1,0 +1,162 @@
+/* Base Reset & Typography */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Full Screen Gradient Background */
+body {
+    min-height: 100vh; 
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; 
+    padding-right: 10vw; 
+    background: linear-gradient(135deg, #a12dc6 0%, #e06c75 50%, #fadb5f 100%);
+}
+
+/* The White Login Card */
+.login-card {
+    background-color: #ffffff;
+    width: 100%;
+    max-width: 380px; 
+    padding: 50px 40px 40px 40px;
+    border-radius: 16px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+/* Floating Logo Styling */
+.logo-container {
+    position: absolute;
+    top: -65px;
+    right: 110px; 
+    filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.15));
+}
+
+/* Recreating the M+ Logo with CSS Typography */
+.logo-text {
+    font-size: 100px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(180deg, #8300bb 0%, #ff910b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: 2px #ffffff;
+    paint-order: stroke fill;
+    line-height: 1;
+}
+
+.logo-text sup {
+    font-size: 50px;
+    font-weight: 900;
+    vertical-align: top;
+    position: relative;
+    top: 15px;
+    left: -5px;
+}
+
+/* Form Headings and Labels */
+.login-card h1 {
+    color: #9610d4;
+    font-size: 45px;
+    font-weight: 700;
+    margin-bottom: 30px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group label {
+    color: #6a6a6a;
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+/* Input Fields */
+.input-group input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    border: 1px solid #d1d1d1;
+    border-radius: 10px;
+    background-color: #f6f6f6;
+    transition: border-color 0.3s ease;
+    outline: none;
+}
+
+.input-group input:focus {
+    border-color: #9d2bd1;
+    background-color: #ffffff;
+}
+
+/* Primary Button */
+.login-btn {
+    width: 100%;
+    padding: 16px;
+    margin-top: 10px;
+    background-color: #9d2bd1;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+.login-btn:hover {
+    background-color: #8322b0;
+}
+
+.login-btn:active {
+    transform: scale(0.98);
+}
+
+
+/*responsiveness*/
+
+/* Tablet & Smaller Laptops */
+@media (max-width: 992px) {
+    body {
+        padding-right: 5vw; 
+    }
+}
+
+/* Mobile Phones */
+@media (max-width: 576px) {
+    body {
+        justify-content: center;
+        padding-right: 15px;
+        padding-left: 15px;
+    }
+
+    .login-card {
+        padding: 40px 25px 30px 25px; 
+    }
+
+    .logo-container {
+        right: 120px; 
+        top: -40px;
+    }
+
+    .logo-text {
+        font-size: 70px; 
+        -webkit-text-stroke: 4px #ffffff;
+    }
+
+    .logo-text sup {
+        font-size: 40px;
+        top: 12px;
+    }
+
+    .login-card h1 {
+        font-size: 28px;
+        margin-bottom: 25px;
+    }
+}
