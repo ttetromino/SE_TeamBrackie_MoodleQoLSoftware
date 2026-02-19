@@ -1,8 +1,11 @@
 # MoodlePlus
+**Moodle+** is a web extension and application to enhance the productivity and well-being of students. It addresses Moodle LMS limitations such as slow server response and lack of integrated planning tools.
 
+## Technical Architecture
 ## Architectural Style: Hybrid Client-Side Architecture
 The system utilizes a **Client-Server** foundation but operates primarily as a Thick Client / Edge-heavy architecture.
 
+* **Offline-First Strategy**: Uses an intelligent cashing mechanism to reduce HTTP requests to servers. 
 * **Logic Location**: Most operations, including GWA computation, AI-driven analysis, and task management, are handled within the user’s browser extension or mobile application. These processes run locally inside the app environment rather than on external servers.
 * **Data Strategy**: It uses an “Offline-First” caching system, where the browser’s database serves as a local data store. This approach helps reduce server load on the UPHSL Moodle infrastructure.
 * **Bridge Pattern**: The Web Extension serves as an exclusive "bridge" to scrape and fetch data from the Moodle domain to bypass CORS limitations.
@@ -16,14 +19,20 @@ The following diagram illustrates the interaction between the Moodle+ components
 * **Moodle+ Web Extension/App**: The primary interface where users interact with the Dashboard and Task Management tools.
 * **The Bridge (Data Scraper)**: Extracts academic records and deadlines from the official Moodle site using flexible CSS selectors.
 * **Local Storage**: Stores encrypted student records and course content locally to ensure privacy and offline access.
+* **UI/UX Layer**: A dashboard providing shortcuts to task management and performance analysis. 
 * **Data Flow**: Moodle Server > Web Extension (Bridge) > Local Cache > Website Application > UI Components.
 
 ### Non-Functional Requirements
-* **Performance:** All computations such as GWA calculation, analytics, and task prioritization are executed locally to ensure fast response times and minimal latency.
+* **Performance:** All computations such as analytics, and task prioritization are executed locally to ensure fast response times and minimal latency.
 * **Reliability & Availability:** The offline-first design ensures that core features remain accessible even during Moodle downtime or unstable network connections.
 * **Scalability:** Since the system does not rely on centralized servers, it scales naturally with the number of users without increasing infrastructure load.
-* **Maintainability:** The modular architecture allows individual components (scraper, analytics engine, UI) to be updated independently.
+* **Maintainability:** The modular architecture allows individual components (scraper, UI) to be updated independently.
 
+
+## Security & Privacy
+* **Local-Only Policy**: No external database is used for student credential or records.
+* **Transparency**: A "Terms of Use" modal is required upon installation to ensure explicit data processing consent.
+* **Performance**: Designed to run smoothly on low-end devices by offloading processing from the server to the client.
 ## Design Principles Applied
 1. *Separation of Concerns (SoC)*
 
