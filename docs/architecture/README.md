@@ -1,10 +1,6 @@
 ## Architectural Style: Hybrid Client-Side Architecture
 The system utilizes a **Client-Server** foundation but operates primarily as a Thick Client / Edge-heavy architecture. 
 
-* **Logic Location**: Most operations, including GWA computation, AI-driven analysis, and task management, are handled within the user’s browser extension or mobile application. These processes run locally inside the app environment rather than on external servers.
-* **Data Strategy**: It uses an “Offline-First” caching system, where the browser’s database serves as a local data store. This approach helps reduce server load on the UPHSL Moodle infrastructure.
-* **Bridge Pattern**: The Web Extension serves as an exclusive "bridge" to scrape and fetch data from the Moodle domain to bypass CORS limitations.
-
 ## High-Level Architecture Diagram
 The following diagram illustrates the interaction between the Moodle+ components and the existing UPHSL Moodle infrastructure.
 
