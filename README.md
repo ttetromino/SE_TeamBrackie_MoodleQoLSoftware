@@ -8,7 +8,8 @@
 
 ## System Architecture
 
-MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. The system is divided into four main layers:
+MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. 
+The system is divided into four main layers:
 ---
 ### 1. Presentation Layer
 This layer represents the **Main App Interface**, where users interact with the system.
