@@ -9,9 +9,7 @@
 ## System Architecture
 
 MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. The system is divided into four main layers:
-
 ---
-
 ### 1. Presentation Layer
 This layer represents the **Main App Interface**, where users interact with the system.
 
@@ -24,8 +22,6 @@ Responsibilities:
 - Display data to users
 - Capture user input
 - Send actions to the controller layer
-
----
 
 ### 2. Application Controller Layer
 
@@ -40,8 +36,6 @@ Responsibilities:
 - Process user actions
 - Determine which services to call
 - Maintain structured flow of requests
-
----
 
 ### 3. Service Layer
 
@@ -71,7 +65,6 @@ Responsibilities:
 - Reduce redundant API calls
 
 ##  System Flow
-
 The system follows a structured data flow:
 
 - The UI sends user actions to the Controller
@@ -79,8 +72,6 @@ The system follows a structured data flow:
 - The Service Layer performs operations
 - The Data Layer provides or stores data
 - The response flows back to the UI
-
----
 
 ## Authentication Flow
 
@@ -90,8 +81,6 @@ The system follows a structured data flow:
 4. Two-Factor Authentication (2FA) is performed  
 5. User gains access to the Main App Interface  
 
----
-
 ## Data Flow (Fetching Courses)
 
 1. User opens the **Courses** section  
@@ -100,8 +89,8 @@ The system follows a structured data flow:
 4. Moodle Service fetches data from:
    - Moodle API (if not cached), or
    - Local Storage (if available)  
-5. Data is returned and displayed to the user  
----
+5. Data is returned and displayed to the user
+6. 
 ## Features
 - Secure authentication with 2FA
 - Course viewing and organization
@@ -109,14 +98,11 @@ The system follows a structured data flow:
 - Cached data for faster performance
 - Mobile-friendly interface
 
----
-
 ## Tech Stack
 - Frontend: React / Flutter / etc.
 - Backend/Services: Node.js / Firebase / etc.
 - Storage: IndexedDB / Local Storage
 - API: Moodle API
----
 ## Future Improvements
 
 - Task and deadline notifications
