@@ -23,6 +23,7 @@ Responsibilities:
 - Capture user input
 - Send actions to the controller layer
 
+---
 ### 2. Application Controller Layer
 
 This layer handles the **core application logic** and acts as the middleman between the UI and services.
@@ -37,6 +38,7 @@ Responsibilities:
 - Determine which services to call
 - Maintain structured flow of requests
 
+---
 ### 3. Service Layer
 
 This layer is responsible for executing system operations.
@@ -51,6 +53,7 @@ Responsibilities:
 - Fetch data from Moodle
 - Manage caching for performance optimization
 
+---
 ### 4. Data Layer
 
 This is the lowest layer where data is stored and retrieved.
@@ -64,6 +67,7 @@ Responsibilities:
 - Store cached data for faster access
 - Reduce redundant API calls
 
+---
 ##  System Flow
 The system follows a structured data flow:
 
@@ -90,7 +94,6 @@ The system follows a structured data flow:
    - Moodle API (if not cached), or
    - Local Storage (if available)  
 5. Data is returned and displayed to the user
-6. 
 ## Features
 - Secure authentication with 2FA
 - Course viewing and organization
