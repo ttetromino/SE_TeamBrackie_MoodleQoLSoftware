@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
+// US-01-T-03: Designing Database Schema
+
 const userSchema = new mongoose.Schema({
   name: { 
     type: String, 
@@ -22,7 +24,7 @@ const userSchema = new mongoose.Schema({
   lmsPassword: { type: String, required: true }
 });
 
-// Hash passwords before saving - WITHOUT using next parameter
+
 userSchema.pre('save', async function() {
   console.log('Pre-save hook triggered');
   
@@ -36,10 +38,10 @@ userSchema.pre('save', async function() {
   
   
   console.log('Pre-save hook completed');
-  // No next() needed - mongoose handles it automatically
+  
 });
 
-// Method to compare LMS password
+
 userSchema.methods.compareLMSPassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.lmsPassword);
@@ -49,7 +51,7 @@ userSchema.methods.compareLMSPassword = async function(candidatePassword) {
   }
 };
 
-// Method to compare main password (if needed)
+
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password);
