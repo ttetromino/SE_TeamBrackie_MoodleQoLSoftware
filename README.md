@@ -121,10 +121,10 @@ The following diagram illustrates the interaction between the Moodle+ components
 
 ### Major Components & Data Flow:
 * **Moodle+ Web Extension/App**: The primary interface where users interact with the Dashboard and Task Management tools.
-* **The Bridge (Data Scraper)**: Extracts academic records and deadlines from the official Moodle site using flexible CSS selectors.
+* **The Bridge (Data Scraper)**: Extracts academic records from the official Moodle site using flexible CSS selectors.
 * **Local Storage**: Stores encrypted student records and course content locally to ensure privacy and offline access.
 * **UI/UX Layer**: A dashboard providing shortcuts to task management and performance analysis. 
-* **Data Flow**: Moodle Server > Web Extension (Bridge) > Local Cache > Website Application > UI Components.
+* **Data Flow**: USER - UI (Main App Interface) - Controller - Service - Data (API/Cache)
 
 ### Non-Functional Requirements
 * **Performance:** All computations such as analytics, and task prioritization are executed locally to ensure fast response times and minimal latency.
