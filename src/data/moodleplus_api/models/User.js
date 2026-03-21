@@ -24,18 +24,18 @@ const userSchema = new mongoose.Schema({
 
 // Hash passwords before saving - WITHOUT using next parameter
 userSchema.pre('save', async function() {
-  console.log('🔐 Pre-save hook triggered');
+  console.log('Pre-save hook triggered');
   
 
   if (this.isModified('password')) {
-    console.log('🔐 Hashing main password');
+    console.log('Hashing main password');
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
   
   
   
-  console.log('✅ Pre-save hook completed');
+  console.log('Pre-save hook completed');
   // No next() needed - mongoose handles it automatically
 });
 
@@ -44,7 +44,7 @@ userSchema.methods.compareLMSPassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.lmsPassword);
   } catch (error) {
-    console.error('❌ Error comparing LMS password:', error);
+    console.error('Error comparing LMS password:', error);
     return false;
   }
 };
@@ -54,7 +54,7 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
-    console.error('❌ Error comparing password:', error);
+    console.error('Error comparing password:', error);
     return false;
   }
 };
