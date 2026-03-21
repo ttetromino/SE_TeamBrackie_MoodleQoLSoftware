@@ -12,7 +12,7 @@ class LMSService {
   // Login to uphslms.com
   Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
     try {
-      print('🔐 Attempting LMS login for: $lmsUsername');
+      print('Attempting LMS login for: $lmsUsername');
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/login'),
         headers: {
@@ -25,7 +25,7 @@ class LMSService {
         }),
       );
 
-      print('📥 LMS login response: ${response.statusCode}');
+      print('LMS login response: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
