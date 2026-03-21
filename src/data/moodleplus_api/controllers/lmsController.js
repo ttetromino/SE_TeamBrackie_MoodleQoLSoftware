@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const { CookieJar } = require('tough-cookie');
 const { wrapper } = require('axios-cookiejar-support');
 const User = require('../models/User');
-
+// US-06-T-01: Cookie Retrieval
 // Store user sessions
 const userSessions = new Map();
 
@@ -33,6 +33,8 @@ const createLMSClient = (cookies = []) => {
   }));
 };
 
+// US-01-T-04: Develop Data Access Layer
+// US-01-T-05: Create Login
 // LMS Login
 const lmsLogin = async (req, res) => {
   console.log('LMS login for:', req.headers['x-user-id']);
@@ -60,7 +62,7 @@ const lmsLogin = async (req, res) => {
         }
       });
 
-    // Verify dashboard access
+   
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
@@ -100,7 +102,7 @@ const lmsLogin = async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 };
-
+ // US-01-T-01: Add Student Account
 // Verify LMS Credentials (for signup)
 const verifyLMSCredentials = async (req, res) => {
   console.log('Verifying LMS credentials');
@@ -202,6 +204,7 @@ const autoLoginLMS = async (req, res) => {
   }
 };
 
+// US-06-T-02: Data Scrape Script
 // Get Courses
 const getCourses = async (req, res) => {
   try {
@@ -210,7 +213,7 @@ const getCourses = async (req, res) => {
       return res.status(401).json({ error: 'Not logged in' });
     }
 
-    console.log('📚 Fetching courses...');
+    console.log('Fetching courses...');
     const client = createLMSClient(session.cookies);
     const response = await client.get('https://uphslms.com/my/courses.php');
 
