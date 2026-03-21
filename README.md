@@ -6,10 +6,48 @@
 * **Account / Credentials Editing**: The program will allow for users to edit their credentials (emails, passwords).
 * **Dashboard**: This is for easier navigation and access to information such as different enrolled subjects.
 
+## Roadmap
+**Sprint 1**: System Kickoff
+Duration: 2 Weeks
+* Create System Architecture
+* Backend Implementation
+* Implement User Authentication (Log-in and Sign-Up)
+
+**Sprint 2**: Data Acquisition
+Duration: 2 Weeks
+* Implement Data Scraping engine
+
+**Sprint 3**: User Features & Management
+Duration: 2 Weeks
+* Implement Backlog list
+* Implement Progress tracker
+* Implement Profile editing functionality
+* Implement Data Archive system
+
+**Phase 2: Productivity & Governance**
+
+**Sprint 4**: Academic Tools
+Duration: 1 Week
+* Implement Gradebook
+* Implement Calendar integration
+
+**Sprint 5:** Security & Administration
+Duration: 2 Weeks
+* Implement Notification system
+* Implement Role-Based Access Control (RBAC)
+* Implement Admin Dashboard for system oversight
+
+**Phase 3: Finalization**
+
+**Sprint 6**: Quality Assurance & Launch
+Duration: 1 Week
+* Polish User Experience (UI/UX refinements)
+* Comprehensive User Documentation
+* Production Deployment
+
 ## System Architecture
 
-MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. 
-The system is divided into four main layers:
+#### MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. The system is divided into four main layers:
 ---
 ### 1. Presentation Layer
 This layer represents the **Main App Interface**, where users interact with the system.
@@ -95,25 +133,7 @@ The system follows a structured data flow:
    - Moodle API (if not cached), or
    - Local Storage (if available)  
 5. Data is returned and displayed to the user
-## Features
-- Secure authentication with 2FA
-- Course viewing and organization
-- LMS file access
-- Cached data for faster performance
-- Mobile-friendly interface
-
-## Tech Stack
-- Frontend: React / Flutter / etc.
-- Backend/Services: Node.js / Firebase / etc.
-- Storage: IndexedDB / Local Storage
-- API: Moodle API
-## Future Improvements
-
-- Task and deadline notifications
-- Course progress tracking
-- Offline mode enhancements
-- UI/UX improvements
-
+   
 ## High-Level Architecture Diagram
 The following diagram illustrates the interaction between the Moodle+ components and the existing UPHSL Moodle infrastructure.
 
