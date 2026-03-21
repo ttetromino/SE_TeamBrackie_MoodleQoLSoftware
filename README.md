@@ -4,23 +4,120 @@
 ## Features of the Program
 * **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
 * **Account / Credentials Editing**: The program will allow for users to edit their credentials (emails, passwords).
-* **Course Enrollment**: This feature will allow users to enroll into courses on their own.
-* **Adding Course Items**: This feature allows users to add their own course items for easier and more accessible tracking.
 * **Dashboard**: This is for easier navigation and access to information such as different enrolled subjects.
 
+## System Architecture
 
-## Architectural Style: Hybrid Client-Side Architecture
-The system utilizes a **Client-Server** foundation but operates primarily as a Thick Client / Edge-heavy architecture.
+MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. 
+The system is divided into four main layers:
+---
+### 1. Presentation Layer
+This layer represents the **Main App Interface**, where users interact with the system.
 
-* **Offline-First Strategy**: Uses an intelligent cashing mechanism to reduce HTTP requests to servers. 
-* **Logic Location**: Most operations, including GWA computation, AI-driven analysis, and task management, are handled within the user’s browser extension or mobile application. These processes run locally inside the app environment rather than on external servers.
-* **Data Strategy**: It uses an “Offline-First” caching system, where the browser’s database serves as a local data store. This approach helps reduce server load on the UPHSL Moodle infrastructure.
-* **Bridge Pattern**: The Web Extension serves as an exclusive "bridge" to scrape and fetch data from the Moodle domain to bypass CORS limitations.
+Features:
+- Profile
+- Courses
+- LMS Files
+
+Responsibilities:
+- Display data to users
+- Capture user input
+- Send actions to the controller layer
+
+---
+### 2. Application Controller Layer
+
+This layer handles the **core application logic** and acts as the middleman between the UI and services.
+
+Components:
+- Auth Controller
+- Course Controller
+- File Controller
+
+Responsibilities:
+- Process user actions
+- Determine which services to call
+- Maintain structured flow of requests
+
+---
+### 3. Service Layer
+
+This layer is responsible for executing system operations.
+
+Components:
+- Auth Service
+- Moodle Service
+- Cache Service
+
+Responsibilities:
+- Handle authentication logic
+- Fetch data from Moodle
+- Manage caching for performance optimization
+
+---
+### 4. Data Layer
+
+This is the lowest layer where data is stored and retrieved.
+
+Components:
+- Moodle API (Primary data source)
+- Local Storage (IndexedDB)
+
+Responsibilities:
+- Provide course and file data
+- Store cached data for faster access
+- Reduce redundant API calls
+
+---
+##  System Flow
+The system follows a structured data flow:
+
+- The UI sends user actions to the Controller
+- The Controller processes the request
+- The Service Layer performs operations
+- The Data Layer provides or stores data
+- The response flows back to the UI
+
+## Authentication Flow
+
+1. User launches the app  
+2. User selects Login or Sign Up  
+3. Credentials are verified  
+4. Two-Factor Authentication (2FA) is performed  
+5. User gains access to the Main App Interface  
+
+## Data Flow (Fetching Courses)
+
+1. User opens the **Courses** section  
+2. Request is sent to the **Course Controller**  
+3. Controller calls the **Moodle Service**  
+4. Moodle Service fetches data from:
+   - Moodle API (if not cached), or
+   - Local Storage (if available)  
+5. Data is returned and displayed to the user
+## Features
+- Secure authentication with 2FA
+- Course viewing and organization
+- LMS file access
+- Cached data for faster performance
+- Mobile-friendly interface
+
+## Tech Stack
+- Frontend: React / Flutter / etc.
+- Backend/Services: Node.js / Firebase / etc.
+- Storage: IndexedDB / Local Storage
+- API: Moodle API
+## Future Improvements
+
+- Task and deadline notifications
+- Course progress tracking
+- Offline mode enhancements
+- UI/UX improvements
 
 ## High-Level Architecture Diagram
 The following diagram illustrates the interaction between the Moodle+ components and the existing UPHSL Moodle infrastructure.
 
-![alt text](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/docs/architecture/DIAGRAM.png)
+![alt text](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/docs/architecture/DIAGRAM.jpeg)
 
 ### Major Components & Data Flow:
 * **Moodle+ Web Extension/App**: The primary interface where users interact with the Dashboard and Task Management tools.
@@ -35,18 +132,17 @@ The following diagram illustrates the interaction between the Moodle+ components
 * **Scalability:** Since the system does not rely on centralized servers, it scales naturally with the number of users without increasing infrastructure load.
 * **Maintainability:** The modular architecture allows individual components (scraper, UI) to be updated independently.
 
-
 ### Security & Privacy
 * **Local-Only Policy**: No external database is used for student credential or records.
 * **Transparency**: A "Terms of Use" modal is required upon installation to ensure explicit data processing consent.
 * **Performance**: Designed to run smoothly on low-end devices by offloading processing from the server to the client.
+
 ## Design Principles Applied
 1. *Separation of Concerns (SoC)*
 
 The team has strictly separated the Data Acquisition layer from the Presentation layer. By using the Web Extension as an exclusive bridge for fetching data, the core productivity features (like the GWA calculator and Task Manager) remain independent of the Moodle server's unstable connectivity. This ensures that even if the Moodle site is slow, the user's local productivity dashboard remains functional.
 
 2. *Security by Design (Local-Only Policy)*
-
 
 To address the risk of credential theft, the architecture applies a strict "Local-Only" data principle.
 
