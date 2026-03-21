@@ -35,7 +35,7 @@ const createLMSClient = (cookies = []) => {
 
 // LMS Login
 const lmsLogin = async (req, res) => {
-  console.log('📥 LMS login for:', req.headers['x-user-id']);
+  console.log('LMS login for:', req.headers['x-user-id']);
   const { username, password } = req.body;
   const loginUrl = 'https://uphslms.com/login/index.php';
 
@@ -84,9 +84,9 @@ const lmsLogin = async (req, res) => {
               lmsSessionExpiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
             }
           );
-          console.log('✅ Session stored in memory and database');
+          console.log('Session stored in memory and database');
         } catch (dbError) {
-          console.log('⚠️ Failed to store cookies in database:', dbError.message);
+          console.log('Failed to store cookies in database:', dbError.message);
         }
       }
 
@@ -96,14 +96,14 @@ const lmsLogin = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('❌ Login error:', error.message);
+    console.error('Login error:', error.message);
     res.status(500).json({ error: 'Login failed' });
   }
 };
 
 // Verify LMS Credentials (for signup)
 const verifyLMSCredentials = async (req, res) => {
-  console.log('🔍 Verifying LMS credentials');
+  console.log('Verifying LMS credentials');
   const { username, password } = req.body;
 
   try {
@@ -137,14 +137,14 @@ const verifyLMSCredentials = async (req, res) => {
     }
 
   } catch (error) {
-    console.error('❌ Verification error:', error.message);
+    console.error('Verification error:', error.message);
     res.status(500).json({ success: false, error: 'Verification failed' });
   }
 };
 
 // Auto Login LMS (check if session exists)
 const autoLoginLMS = async (req, res) => {
-  console.log('🤖 Auto-login for user:', req.body.userId);
+  console.log('Auto-login for user:', req.body.userId);
   
   try {
     // First check in-memory session
@@ -155,7 +155,7 @@ const autoLoginLMS = async (req, res) => {
       try {
         const dashboard = await client.get('https://uphslms.com/');
         if (!dashboard.data.includes('Log in')) {
-          console.log('✅ Existing in-memory session still valid');
+          console.log('Existing in-memory session still valid');
           return res.json({ success: true });
         }
       } catch (e) {
@@ -165,7 +165,7 @@ const autoLoginLMS = async (req, res) => {
     }
 
     // If no in-memory session, try to restore from database
-    console.log('🔄 Trying to restore session from database');
+    console.log('Trying to restore session from database');
     const user = await User.findOne({ email: req.body.userId });
     
     if (user && user.lmsCookies && user.lmsCookies.length > 0) {
@@ -176,7 +176,7 @@ const autoLoginLMS = async (req, res) => {
         try {
           const dashboard = await client.get('https://uphslms.com/');
           if (!dashboard.data.includes('Log in')) {
-            console.log('✅ Restored session from database');
+            console.log('Restored session from database');
             
             // Restore to in-memory storage
             userSessions.set(req.body.userId, {
@@ -193,11 +193,11 @@ const autoLoginLMS = async (req, res) => {
     }
 
     // No valid session
-    console.log('❌ No valid session found');
+    console.log('No valid session found');
     res.json({ success: false, message: 'No valid session' });
     
   } catch (error) {
-    console.error('❌ Auto-login error:', error.message);
+    console.error('Auto-login error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
@@ -229,7 +229,7 @@ const getCourses = async (req, res) => {
       }
     });
 
-    console.log(`📊 Found ${courses.length} courses`);
+    console.log(`Found ${courses.length} courses`);
     res.json({ courses });
 
   } catch (error) {
@@ -250,7 +250,7 @@ const getCourseContents = async (req, res) => {
       ? req.body.courseUrl
       : `https://uphslms.com${req.body.courseUrl}`;
 
-    console.log('📚 Fetching course contents from:', url);
+    console.log('Fetching course contents from:', url);
     const client = createLMSClient(session.cookies);
     const response = await client.get(url);
 
