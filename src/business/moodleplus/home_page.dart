@@ -95,7 +95,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _lmsLoading = true;
       _lmsErrorMessage = null;
     });
-
+     // US-06-T-02: Data Scrape Script
     List<LmsCourse> courses = await _lmsService.getCourses();
 
     setState(() {
@@ -566,7 +566,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ],
     );
   }
-
+     // US-06-T-02: Data Scrape Script
   Widget _buildCoursesTab() {
     if (_lmsLoading) {
       return Center(
