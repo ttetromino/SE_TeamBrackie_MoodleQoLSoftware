@@ -27,6 +27,10 @@ class _SignupPageState extends State<SignupPage> {
     final String lmsUsername = lmsUsernameController.text.trim();
     final String lmsPassword = lmsPasswordController.text.trim();
 
+    
+    //    US-01-T-06: Sign Up Using LMS Credentials
+
+    
     // Validate all fields
     if (name.isEmpty || email.isEmpty || password.isEmpty ||
         lmsUsername.isEmpty || lmsPassword.isEmpty) {
@@ -41,7 +45,7 @@ class _SignupPageState extends State<SignupPage> {
 
     setState(() => loading = true);
 
-    // STEP 1: Verify LMS credentials first
+    // STEP 1: Verify LMS credentials (should be 1st)
     bool lmsVerified = await _verifyLMSCredentials(lmsUsername, lmsPassword);
 
     if (!lmsVerified) {
@@ -85,19 +89,19 @@ class _SignupPageState extends State<SignupPage> {
         body: jsonEncode(requestBody),
       );
 
-      print('⬅️ Response status: ${response.statusCode}');
+      print('Response status: ${response.statusCode}');
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
         if (!mounted) return;
 
-        print('🔐 Attempting immediate LMS login after signup...');
+        print('Attempting immediate LMS login after signup...');
         final lmsService = LMSService(userId: email);
         bool lmsLoginSuccess = await lmsService.loginToLMS(lmsUsername, lmsPassword);
 
         if (lmsLoginSuccess) {
-          print('✅ LMS login successful after signup');
+          print('LMS login successful after signup');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Signup successful! LMS connected.'),
@@ -105,7 +109,7 @@ class _SignupPageState extends State<SignupPage> {
             ),
           );
         } else {
-          print('❌ LMS login failed after signup');
+          print('LMS login failed after signup');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Signup successful but LMS connection failed. You can try again in the app.'),
@@ -126,7 +130,7 @@ class _SignupPageState extends State<SignupPage> {
         );
       }
     } catch (e) {
-      print('❌ Signup error: $e');
+      print('Signup error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -141,7 +145,7 @@ class _SignupPageState extends State<SignupPage> {
 
   Future<bool> _verifyLMSCredentials(String username, String password) async {
     try {
-      print('🔍 Verifying LMS credentials...');
+      print('Verifying LMS credentials...');
       final response = await http.post(
         Uri.parse('http://10.0.2.2:5000/api/lms/verify'),
         headers: {'Content-Type': 'application/json'},
@@ -152,19 +156,19 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       if (response.statusCode == 200) {
-        print('✅ LMS credentials verified');
+        print('LMS credentials verified');
         return true;
       } else {
-        print('❌ LMS verification failed: ${response.statusCode}');
+        print('LMS verification failed: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('❌ LMS verification error: $e');
+      print('LMS verification error: $e');
       return false;
     }
   }
 
-
+  //   US-01-T-01: Add Student Account
   @override
   Widget build(BuildContext context) {
     return Scaffold(
