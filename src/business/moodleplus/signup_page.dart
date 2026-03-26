@@ -44,7 +44,7 @@ class _SignupPageState extends State<SignupPage> {
     }
 
     setState(() => loading = true);
-
+    // US-01-T-06: Sign Up Using LMS Credentials
     // STEP 1: Verify LMS credentials (should be 1st)
     bool lmsVerified = await _verifyLMSCredentials(lmsUsername, lmsPassword);
 
