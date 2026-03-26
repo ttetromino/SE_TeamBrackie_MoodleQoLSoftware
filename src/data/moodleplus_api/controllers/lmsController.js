@@ -35,7 +35,7 @@ const createLMSClient = (cookies = []) => {
 
 // LMS Login
 const lmsLogin = async (req, res) => {
-  console.log('LMS login for:', req.headers['x-user-id']);
+  console.log('📥 LMS login for:', req.headers['x-user-id']);
   const { username, password } = req.body;
   const loginUrl = 'https://uphslms.com/login/index.php';
 
@@ -64,6 +64,7 @@ const lmsLogin = async (req, res) => {
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
+      // US-06-T-01: Cookie Retrieval
       // Get cookies from jar
       const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
       const cookieStrings = cookies.map(c => c.cookieString());
@@ -103,7 +104,7 @@ const lmsLogin = async (req, res) => {
 
 // Verify LMS Credentials (for signup)
 const verifyLMSCredentials = async (req, res) => {
-  console.log('Verifying LMS credentials');
+  console.log('🔍 Verifying LMS credentials');
   const { username, password } = req.body;
 
   try {
@@ -165,7 +166,7 @@ const autoLoginLMS = async (req, res) => {
     }
 
     // If no in-memory session, try to restore from database
-    console.log('Trying to restore session from database');
+    console.log('🔄 Trying to restore session from database');
     const user = await User.findOne({ email: req.body.userId });
     
     if (user && user.lmsCookies && user.lmsCookies.length > 0) {
@@ -229,7 +230,7 @@ const getCourses = async (req, res) => {
       }
     });
 
-    console.log(`Found ${courses.length} courses`);
+    console.log(`📊 Found ${courses.length} courses`);
     res.json({ courses });
 
   } catch (error) {
@@ -250,7 +251,7 @@ const getCourseContents = async (req, res) => {
       ? req.body.courseUrl
       : `https://uphslms.com${req.body.courseUrl}`;
 
-    console.log('Fetching course contents from:', url);
+    console.log('📚 Fetching course contents from:', url);
     const client = createLMSClient(session.cookies);
     const response = await client.get(url);
 
@@ -359,7 +360,7 @@ const getCourseContents = async (req, res) => {
       }
     });
 
-    console.log(`📊 Found ${courseContents.length} sections with total ${courseContents.reduce((acc, section) => acc + section.activities.length, 0)} activities`);
+    console.log(`Found ${courseContents.length} sections with total ${courseContents.reduce((acc, section) => acc + section.activities.length, 0)} activities`);
 
     res.json({
       courseTitle,
@@ -378,7 +379,7 @@ setInterval(() => {
   for (const [id, session] of userSessions.entries()) {
     if (Date.now() - session.timestamp > oneHour) {
       userSessions.delete(id);
-      console.log('🧹 Removed expired session for user:', id);
+      console.log('Removed expired session for user:', id);
     }
   }
 }, 3600000);
