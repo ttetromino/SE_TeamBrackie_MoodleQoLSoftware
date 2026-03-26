@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-
+// US-01-T-03: Designing Database Schema
 const userSchema = new mongoose.Schema({
   name: { 
     type: String, 
