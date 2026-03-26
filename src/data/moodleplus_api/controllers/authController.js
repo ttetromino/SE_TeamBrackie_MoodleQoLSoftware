@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 
-// US-01-T-06: Sign Up Using LMS Credentials
 // Signup with required LMS credentials
 const signup = async (req, res) => {
   try {
@@ -27,7 +26,8 @@ const signup = async (req, res) => {
       console.log('User already exists:', email);
       return res.status(400).json({ error: 'Email already registered' });
     }
-
+    
+      // US-01-T-01: Add Student Account
     // Create user with required LMS credentials
     console.log('Creating new user...');
     const user = new User({ 
@@ -170,7 +170,7 @@ const autoLoginLMS = async (req, res) => {
         console.log(`Session expiry: ${expiry}, Current: ${now}`);
         
         if (now < expiry) {
-          console.log('Session not expired, attempting to use');
+          console.log('⏳ Session not expired, attempting to use');
           // Try to use stored cookies
           const client = createLMSClient(user.lmsCookies);
           try {
