@@ -64,7 +64,7 @@ const lmsLogin = async (req, res) => {
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
-      // US-06-T-01: Cookie Retrieval
+      // US-06-T-01: Cookie Retrieval 
       // Get cookies from jar
       const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
       const cookieStrings = cookies.map(c => c.cookieString());
