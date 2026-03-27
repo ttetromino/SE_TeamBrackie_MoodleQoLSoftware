@@ -131,7 +131,6 @@ const updateLMSCredentials = async (req, res) => {
   }
 };
 
-
 // Auto Login LMS (check if session exists)
 const autoLoginLMS = async (req, res) => {
   console.log('Auto-login for user:', req.body.userId);
@@ -141,12 +140,14 @@ const autoLoginLMS = async (req, res) => {
     
     // First check in-memory session
     const session = userSessions.get(userId);
-    if (session) {
+    if (session && session.cookies) {
       console.log('Found in-memory session');
       // Check if session is still valid
       const client = createLMSClient(session.cookies);
       try {
-        const dashboard = await client.get('https://uphslms.com/');
+        const dashboard = await client.get('https://uphslms.com/my/', {
+          timeout: 10000
+        });
         if (!dashboard.data.includes('Log in')) {
           console.log('Existing in-memory session still valid');
           return res.json({ success: true });
@@ -178,14 +179,17 @@ const autoLoginLMS = async (req, res) => {
           // Try to use stored cookies
           const client = createLMSClient(user.lmsCookies);
           try {
-            const dashboard = await client.get('https://uphslms.com/');
+            const dashboard = await client.get('https://uphslms.com/my/', {
+              timeout: 10000
+            });
             if (!dashboard.data.includes('Log in')) {
               console.log('Restored session from database');
               
               // Restore to in-memory storage
               userSessions.set(userId, {
                 cookies: user.lmsCookies,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                username: user.lmsUsername
               });
               
               return res.json({ success: true });
@@ -215,7 +219,6 @@ const autoLoginLMS = async (req, res) => {
   }
 };
 
-// US-01-T-02: Biometrics Verification
 // Enable biometric login for user
 const enableBiometricLogin = async (req, res) => {
   try {
