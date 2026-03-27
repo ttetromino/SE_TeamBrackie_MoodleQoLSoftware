@@ -64,7 +64,11 @@ const lmsLogin = async (req, res) => {
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
+<<<<<<< HEAD
       // US-06-T-01: Cookie Retrieval 
+=======
+      // US-06-T-01: Cookie Retrieval
+>>>>>>> frontend
       // Get cookies from jar
       const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
       const cookieStrings = cookies.map(c => c.cookieString());
@@ -261,7 +265,11 @@ const getCourseContents = async (req, res) => {
     // Get course title
     const courseTitle = $('h1').first().text().trim();
     console.log('📖 Course:', courseTitle);
+<<<<<<< HEAD
     // US-06-T-02: Data Scrape Script 
+=======
+    // US-06-T-02: Data Scrape Script
+>>>>>>> frontend
     // Extract sections
     $('li.section.course-section.main').each((sectionIndex, section) => {
       const sectionElement = $(section);

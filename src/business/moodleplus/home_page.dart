@@ -99,7 +99,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _lmsLoading = true;
       _lmsErrorMessage = null;
     });
-
+     // US-06-T-02: Data Scrape Script
     List<LmsCourse> courses = await _lmsService.getCourses();
 
     setState(() {
@@ -431,6 +431,30 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 32),
+<<<<<<< HEAD
+=======
+
+          // LMS Tracker Card - US-07-T-01
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildLMSTracker(
+                progress: _courses.isEmpty ? 0.0 : 0.75,
+                newTasks: 3,
+                assignments: 2,
+                quizzes: 2,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Account Information Card
+>>>>>>> frontend
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -520,6 +544,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 16),
+<<<<<<< HEAD
+=======
+
+          const SizedBox(height: 16),
+          // Stats Card
+>>>>>>> frontend
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -648,6 +678,61 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  // US-07-T-01: Dynamic Tracking
+  Widget _buildLMSTracker({
+    required double progress,
+    required int newTasks,
+    required int assignments,
+    required int quizzes,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF9D2BD1)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '${(progress * 100).toInt()}%',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$newTasks New Tasks Today'),
+                    Text('$assignments Assignments'),
+                    Text('$quizzes Upcoming Quiz'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: Colors.grey[300],
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF9D2BD1)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+     // US-06-T-02: Data Scrape Script
   Widget _buildCoursesTab() {
     if (_lmsLoading) {
       return Center(
