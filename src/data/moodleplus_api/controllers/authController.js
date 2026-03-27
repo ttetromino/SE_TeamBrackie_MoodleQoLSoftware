@@ -1,7 +1,9 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const { createLMSClient } = require('../utils/lmsClient');
+const { userSessions } = require('../utils/sessionStore');
 
-// US-01-T-06: Sign Up Using LMS Credentials
 // Signup with required LMS credentials
 const signup = async (req, res) => {
   try {
@@ -20,7 +22,7 @@ const signup = async (req, res) => {
         error: 'All fields are required including LMS credentials' 
       });
     }
-      // US-01-T-04: Develop Data Access Layer 
+      // US-01-T-04: Develop Data Access Layer
     // Check if user already exists
     const existing = await User.findOne({ email });
     if (existing) {
@@ -28,7 +30,7 @@ const signup = async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
     
-      // US-01-T-01: Add Student Account 
+      // US-01-T-01: Add Student Account
     // Create user with required LMS credentials
     console.log('Creating new user...');
     const user = new User({ 
@@ -59,7 +61,8 @@ const signup = async (req, res) => {
     });
   }
 };
-// US-01-T-05: Create Login 
+
+// US-01-T-05: Create Login
 // Login
 const login = async (req, res) => {
   try {
@@ -211,4 +214,124 @@ const autoLoginLMS = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-module.exports = { signup, login, updateLMSCredentials, autoLoginLMS };
+
+// US-01-T-02: Biometrics Verification
+// Enable biometric login for user
+const enableBiometricLogin = async (req, res) => {
+  try {
+    const { email, biometricToken } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Generate a unique token if not provided
+    const token = biometricToken || crypto.randomBytes(32).toString('hex');
+    
+    user.biometricEnabled = true;
+    user.biometricToken = token;
+    user.biometricEnabledAt = new Date();
+    
+    await user.save();
+    
+    console.log(`Biometric login enabled for user: ${email}`);
+    res.json({ 
+      success: true,
+      message: 'Biometric login enabled',
+      token: token
+    });
+  } catch (err) {
+    console.error('Enable biometric error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Disable biometric login for user
+const disableBiometricLogin = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.biometricEnabled = false;
+    user.biometricToken = null;
+    user.biometricEnabledAt = null;
+    
+    await user.save();
+    
+    console.log(`Biometric login disabled for user: ${email}`);
+    res.json({ 
+      success: true,
+      message: 'Biometric login disabled'
+    });
+  } catch (err) {
+    console.error('Disable biometric error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Biometric login
+const biometricLogin = async (req, res) => {
+  try {
+    const { email, biometricToken } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if biometric is enabled and token matches
+    if (!user.biometricEnabled || user.biometricToken !== biometricToken) {
+      return res.status(401).json({ error: 'Invalid biometric authentication' });
+    }
+    
+    console.log(`Biometric login successful for: ${email}`);
+    res.json({ 
+      success: true,
+      user: { 
+        name: user.name, 
+        email: user.email,
+        lmsUsername: user.lmsUsername,
+        biometricEnabled: user.biometricEnabled
+      }
+    });
+  } catch (err) {
+    console.error('Biometric login error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get biometric status
+const getBiometricStatus = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      biometricEnabled: user.biometricEnabled,
+      enabledAt: user.biometricEnabledAt
+    });
+  } catch (err) {
+    console.error('Get biometric status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { 
+  signup, 
+  login, 
+  updateLMSCredentials, 
+  autoLoginLMS,
+  enableBiometricLogin,
+  disableBiometricLogin,
+  biometricLogin,
+  getBiometricStatus
+};
