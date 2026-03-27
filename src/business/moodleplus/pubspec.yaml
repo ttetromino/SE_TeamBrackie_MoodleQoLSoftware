@@ -31,9 +31,9 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Your existing dependencies
+  local_auth: ^2.1.7
+  shared_preferences: ^2.2.2
   http: ^1.1.0
-
   # Add these new dependencies
   path_provider: ^2.1.1
   permission_handler: ^11.0.1
