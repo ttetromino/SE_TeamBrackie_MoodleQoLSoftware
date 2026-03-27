@@ -27,7 +27,7 @@ const signup = async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
     
-      // US-01-T-01: Add Student Account
+      // US-01-T-01: Add Student Account 
     // Create user with required LMS credentials
     console.log('Creating new user...');
     const user = new User({ 
