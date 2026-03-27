@@ -19,7 +19,7 @@ const signup = async (req, res) => {
         error: 'All fields are required including LMS credentials' 
       });
     }
-      // US-01-T-04: Develop Data Access Layer
+      // US-01-T-04: Develop Data Access Layer 
     // Check if user already exists
     const existing = await User.findOne({ email });
     if (existing) {
