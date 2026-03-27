@@ -27,10 +27,6 @@ class _SignupPageState extends State<SignupPage> {
     final String lmsUsername = lmsUsernameController.text.trim();
     final String lmsPassword = lmsPasswordController.text.trim();
 
-    
-    //    US-01-T-06: Sign Up Using LMS Credentials
-
-    
     // Validate all fields
     if (name.isEmpty || email.isEmpty || password.isEmpty ||
         lmsUsername.isEmpty || lmsPassword.isEmpty) {
@@ -43,9 +39,20 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
+    // B-01-260313: Invalid Email Syntax
+    if (!email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please include an "@" in the email address.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => loading = true);
-    // US-01-T-06: Sign Up Using LMS Credentials
-    // STEP 1: Verify LMS credentials (should be 1st)
+
+    // STEP 1: Verify LMS credentials first
     bool lmsVerified = await _verifyLMSCredentials(lmsUsername, lmsPassword);
 
     if (!lmsVerified) {
@@ -80,7 +87,7 @@ class _SignupPageState extends State<SignupPage> {
       'lmsPassword': lmsPassword
     };
 
-    print('📝 Creating account...');
+    print('Creating account...');
 
     try {
       final response = await http.post(
@@ -168,7 +175,7 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
-  //   US-01-T-01: Add Student Account
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
