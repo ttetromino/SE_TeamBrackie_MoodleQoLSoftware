@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'services/lms_service.dart';
 import 'course_contents_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'services/biometric_service.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -21,6 +25,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   List<LmsCourse> _courses = [];
   String? _lmsErrorMessage;
 
+  final BiometricService _biometricService = BiometricService();
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
+
+  // Constants
+  static const String baseUrl = 'http://10.0.2.2:5000';
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +42,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLoginToLMS();
     });
+    _checkBiometricStatus();
   }
 
   @override
@@ -39,19 +51,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  // Auto-login to LMS
   Future<void> _autoLoginToLMS() async {
     setState(() {
       _lmsLoading = true;
       _lmsErrorMessage = null;
     });
-
-    // Show a snackbar that auto-login is in progress
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Connecting to LMS...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
 
     print('🔄 Attempting auto-login...');
     bool success = await _lmsService.autoLoginLMS();
@@ -67,7 +72,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     } else {
       print('⚠️ Auto-login failed - no valid session');
 
-      // Try one more time with a small delay (maybe session wasn't ready)
+      // Try one more time with a small delay
       await Future.delayed(const Duration(seconds: 1));
       print('🔄 Retrying auto-login...');
       bool retrySuccess = await _lmsService.autoLoginLMS();
@@ -84,7 +89,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         setState(() {
           _isLMSLoggedIn = false;
           _lmsLoading = false;
-          _lmsErrorMessage = 'Unable to connect to LMS automatically. Please login manually.';
         });
       }
     }
@@ -165,7 +169,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // Option to logout from app
               _showLogoutConfirmation();
             },
             child: const Text('Logout from App'),
@@ -263,6 +266,53 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ),
     );
   }
+  
+  
+  // US-01-T-02: Biometrics Verification
+  // Check biometric status
+  
+  Future<void> _checkBiometricStatus() async {
+    final available = await _biometricService.isBiometricAvailable();
+    final enabled = await _biometricService.isBiometricEnabledForUser(widget.user['email']);
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled = enabled;
+    });
+  }
+
+  // Toggle biometric
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      final enabled = await _biometricService.enableBiometric(widget.user['email']);
+      if (enabled && mounted) {
+        setState(() => _biometricEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric login enabled!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to enable biometric login'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
+      final disabled = await _biometricService.disableBiometric(widget.user['email']);
+      if (disabled && mounted) {
+        setState(() => _biometricEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric login disabled'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -292,9 +342,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Profile Tab
           _buildProfileTab(),
-          // Courses Tab
           _buildCoursesTab(),
         ],
       ),
@@ -307,7 +355,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // Profile Header
           Stack(
             alignment: Alignment.center,
             children: [
@@ -361,8 +408,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ],
           ),
           const SizedBox(height: 24),
-
-          // User Name
           Text(
             widget.user['name'],
             style: const TextStyle(
@@ -371,8 +416,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 8),
-
-          // User Email
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -388,8 +431,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 32),
-
-          // Account Information Card
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -432,13 +473,53 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     value: _isLMSLoggedIn ? 'Connected' : 'Disconnected',
                     valueColor: _isLMSLoggedIn ? Colors.green : Colors.orange,
                   ),
+                  if (_biometricAvailable) ...[
+                    const Divider(height: 24),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.fingerprint, size: 20, color: Color(0xFF9D2BD1)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Biometric Login',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Use fingerprint or face ID to login',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _biometricEnabled,
+                          onChanged: _toggleBiometric,
+                          activeColor: const Color(0xFF9D2BD1),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-
-          // Stats Card
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(

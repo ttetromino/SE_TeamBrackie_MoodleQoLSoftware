@@ -12,7 +12,7 @@ class LMSService {
   // Login to uphslms.com
   Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
     try {
-      print('🔐 Attempting LMS login for: $lmsUsername');
+      print('Attempting LMS login for: $lmsUsername');
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/login'),
         headers: {
@@ -25,7 +25,7 @@ class LMSService {
         }),
       );
 
-      print('📥 LMS login response: ${response.statusCode}');
+      print('LMS login response: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -58,7 +58,7 @@ class LMSService {
       return false;
     }
   }
-
+    //     US-06-T-02: Data Scrape Script
   // Get courses from LMS
   Future<List<LmsCourse>> getCourses() async {
     try {
@@ -82,7 +82,7 @@ class LMSService {
       return [];
     }
   }
-
+    //     US-06-T-02: Data Scrape Script
   // Get course contents (sections and activities)
   Future<CourseContents> getCourseContents(String courseUrl) async {
     try {
@@ -106,7 +106,7 @@ class LMSService {
     }
   }
 }
-
+ //     US-06-T-02: Data Scrape Script
 // Course Models
 class LmsCourse {
   final String id;

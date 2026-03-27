@@ -1,7 +1,11 @@
+// /lib/signup_page.dart
+
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'services/lms_service.dart';
+import 'services/biometric_service.dart';
+import 'package:local_auth/local_auth.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -19,6 +23,24 @@ class _SignupPageState extends State<SignupPage> {
 
   bool loading = false;
   bool isLmsPasswordVisible = false;
+  final BiometricService _biometricService = BiometricService();
+  bool _biometricAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailability();
+  }
+  
+  // US-01-T-02: Biometrics Verification
+  
+  Future<void> _checkBiometricAvailability() async {
+    final available = await _biometricService.isBiometricAvailable();
+    print('🔍 Biometric available: $available');
+    setState(() {
+      _biometricAvailable = available;
+    });
+  }
 
   Future<void> signup() async {
     final String name = nameController.text.trim();
@@ -33,6 +55,18 @@ class _SignupPageState extends State<SignupPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('All fields are required including LMS credentials'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // B-01-260313: Invalid Email Syntax
+    // Validate email
+    if (!email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please include an "@" in the email address.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -61,8 +95,6 @@ class _SignupPageState extends State<SignupPage> {
     await _createAccount(name, email, password, lmsUsername, lmsPassword);
   }
 
-
-
   Future<void> _createAccount(String name, String email, String password,
       String lmsUsername, String lmsPassword) async {
 
@@ -76,7 +108,7 @@ class _SignupPageState extends State<SignupPage> {
       'lmsPassword': lmsPassword
     };
 
-    print('📝 Creating account...');
+    print('Creating account...');
 
     try {
       final response = await http.post(
@@ -85,19 +117,19 @@ class _SignupPageState extends State<SignupPage> {
         body: jsonEncode(requestBody),
       );
 
-      print('⬅️ Response status: ${response.statusCode}');
+      print('Response status: ${response.statusCode}');
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
         if (!mounted) return;
 
-        print('🔐 Attempting immediate LMS login after signup...');
+        print('Attempting immediate LMS login after signup...');
         final lmsService = LMSService(userId: email);
         bool lmsLoginSuccess = await lmsService.loginToLMS(lmsUsername, lmsPassword);
 
         if (lmsLoginSuccess) {
-          print('✅ LMS login successful after signup');
+          print('LMS login successful after signup');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Signup successful! LMS connected.'),
@@ -105,7 +137,7 @@ class _SignupPageState extends State<SignupPage> {
             ),
           );
         } else {
-          print('❌ LMS login failed after signup');
+          print('LMS login failed after signup');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Signup successful but LMS connection failed. You can try again in the app.'),
@@ -114,8 +146,15 @@ class _SignupPageState extends State<SignupPage> {
           );
         }
 
-        // Navigate to login page
-        Navigator.pushReplacementNamed(context, '/login');
+        // ALWAYS ask to enable biometrics after signup (if available)
+        if (_biometricAvailable && mounted) {
+          // Wait a moment for the snackbar to be visible
+          await Future.delayed(const Duration(milliseconds: 500));
+          _showBiometricSetupDialog(email);
+        } else {
+          // Navigate to login page
+          Navigator.pushReplacementNamed(context, '/login');
+        }
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -124,9 +163,10 @@ class _SignupPageState extends State<SignupPage> {
             backgroundColor: Colors.red,
           ),
         );
+        setState(() => loading = false);
       }
     } catch (e) {
-      print('❌ Signup error: $e');
+      print('Signup error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -134,14 +174,13 @@ class _SignupPageState extends State<SignupPage> {
           backgroundColor: Colors.red,
         ),
       );
+      setState(() => loading = false);
     }
-
-    setState(() => loading = false);
   }
 
   Future<bool> _verifyLMSCredentials(String username, String password) async {
     try {
-      print('🔍 Verifying LMS credentials...');
+      print('Verifying LMS credentials...');
       final response = await http.post(
         Uri.parse('http://10.0.2.2:5000/api/lms/verify'),
         headers: {'Content-Type': 'application/json'},
@@ -152,18 +191,289 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       if (response.statusCode == 200) {
-        print('✅ LMS credentials verified');
+        print('LMS credentials verified');
         return true;
       } else {
-        print('❌ LMS verification failed: ${response.statusCode}');
+        print('LMS verification failed: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('❌ LMS verification error: $e');
+      print('LMS verification error: $e');
       return false;
     }
   }
 
+  Future<void> _showBiometricSetupDialog(String email) async {
+    // Get available biometrics
+    final biometrics = await _biometricService.getAvailableBiometrics();
+    String biometricTypeName = 'Biometric';
+    if (biometrics.isNotEmpty) {
+      biometricTypeName = _biometricService.getBiometricTypeName(biometrics.first);
+    }
+
+    // Determine icon based on available biometrics
+    IconData biometricIcon = Icons.fingerprint;
+    if (biometrics.contains(BiometricType.face)) {
+      biometricIcon = Icons.face;
+    } else if (biometrics.contains(BiometricType.fingerprint)) {
+      biometricIcon = Icons.fingerprint;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🔐 Secure Your Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                biometricIcon,
+                size: 60,
+                color: const Color(0xFF9D2BD1),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Enable $biometricTypeName Login',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Use your ${biometrics.contains(BiometricType.fingerprint) ? 'fingerprint' : 'face ID'} to login quickly and securely.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.security, size: 16, color: Colors.green),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your biometric data stays on your device and is never shared with our servers.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[800],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You can change this anytime in Settings',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              setState(() => loading = true);
+
+              // Show loading indicator
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Setting up biometric authentication...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+
+              await Future.delayed(const Duration(milliseconds: 500));
+
+              setState(() => loading = false);
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            child: const Text('Set Up Later'),
+          ),
+
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              setState(() => loading = true);
+
+              // Show setup progress
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Setting up $biometricTypeName authentication...'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+
+              // Enable biometric with better error handling
+              bool enabled = false;
+              try {
+                enabled = await _biometricService.enableBiometric(email);
+                print('Biometric enabled result: $enabled');
+              } catch (e) {
+                print('Error enabling biometric: $e');
+                enabled = false;
+              }
+
+              setState(() => loading = false);
+
+              if (enabled && mounted) {
+                // Show success message
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('✓ $biometricTypeName login enabled!'),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+
+                // Show success dialog
+                await Future.delayed(const Duration(milliseconds: 500));
+
+                if (mounted) {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => AlertDialog(
+                      title: const Text('🎉 Success!'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 60,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '$biometricTypeName authentication enabled!',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Next time you login, use your $biometricTypeName for quick access.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.pushReplacementNamed(context, '/login');
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF9D2BD1),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('Continue to Login'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              } else {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not enable biometrics. You can enable it later in settings.'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+
+                  // Still navigate to login after a short delay
+                  await Future.delayed(const Duration(seconds: 2));
+                  if (mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9D2BD1),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'Enable $biometricTypeName',
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBiometricDemoDialog(String biometricTypeName) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🎉 Setup Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 60,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '$biometricTypeName authentication has been enabled!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Next time you login, you can use your $biometricTypeName instead of your password.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9D2BD1),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Got it!'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -275,7 +585,6 @@ class _SignupPageState extends State<SignupPage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

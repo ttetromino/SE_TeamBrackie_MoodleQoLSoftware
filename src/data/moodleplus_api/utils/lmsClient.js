@@ -2,6 +2,8 @@ const axios = require('axios');
 const { CookieJar } = require('tough-cookie');
 const { wrapper } = require('axios-cookiejar-support');
 
+// US-06-T-01: Cookie Retrieval
+// US-01-T-04: Develop Data Access Layer
 const createLMSClient = (cookies = []) => {
   const jar = new CookieJar();
   
