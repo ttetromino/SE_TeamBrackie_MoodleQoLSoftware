@@ -261,7 +261,7 @@ const getCourseContents = async (req, res) => {
     // Get course title
     const courseTitle = $('h1').first().text().trim();
     console.log('📖 Course:', courseTitle);
-    // US-06-T-02: Data Scrape Script
+    // US-06-T-02: Data Scrape Script 
     // Extract sections
     $('li.section.course-section.main').each((sectionIndex, section) => {
       const sectionElement = $(section);
