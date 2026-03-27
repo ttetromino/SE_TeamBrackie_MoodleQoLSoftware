@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 
+// US-01-T-06: Sign Up Using LMS Credentials
 // Signup with required LMS credentials
 const signup = async (req, res) => {
   try {
