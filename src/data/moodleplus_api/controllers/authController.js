@@ -61,12 +61,6 @@ const signup = async (req, res) => {
     });
   }
 };
-<<<<<<< HEAD
-
-=======
->>>>>>> frontend
-// US-01-T-05: Create Login
-// Login
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -143,11 +137,8 @@ const autoLoginLMS = async (req, res) => {
     
     // First check in-memory session
     const session = userSessions.get(userId);
-<<<<<<< HEAD
-    if (session && session.cookies) {
-=======
+
     if (session) {
->>>>>>> frontend
       console.log('Found in-memory session');
       // Check if session is still valid
       const client = createLMSClient(session.cookies);
@@ -225,7 +216,6 @@ const autoLoginLMS = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-<<<<<<< HEAD
 
 // Enable biometric login for user
 const enableBiometricLogin = async (req, res) => {
@@ -346,6 +336,6 @@ module.exports = {
   biometricLogin,
   getBiometricStatus
 };
-=======
+
 module.exports = { signup, login, updateLMSCredentials, autoLoginLMS };
->>>>>>> frontend
+
