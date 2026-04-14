@@ -33,6 +33,7 @@ const createLMSClient = (cookies = []) => {
   }));
 };
 
+
 // LMS Login
 const lmsLogin = async (req, res) => {
   console.log('📥 LMS login for:', req.headers['x-user-id']);
@@ -64,11 +65,7 @@ const lmsLogin = async (req, res) => {
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
-
-      // US-06-T-01: Cookie Retrieval 
-
       // US-06-T-01: Cookie Retrieval
-
       // Get cookies from jar
       const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
       const cookieStrings = cookies.map(c => c.cookieString());
@@ -207,6 +204,7 @@ const autoLoginLMS = async (req, res) => {
   }
 };
 
+
 // Get Courses
 const getCourses = async (req, res) => {
   try {
@@ -265,11 +263,7 @@ const getCourseContents = async (req, res) => {
     // Get course title
     const courseTitle = $('h1').first().text().trim();
     console.log('📖 Course:', courseTitle);
-
-    // US-06-T-02: Data Scrape Script 
-
     // US-06-T-02: Data Scrape Script
-
     // Extract sections
     $('li.section.course-section.main').each((sectionIndex, section) => {
       const sectionElement = $(section);
@@ -381,6 +375,7 @@ const getCourseContents = async (req, res) => {
   }
 };
 
+
 // Cleanup old sessions (run every hour)
 setInterval(() => {
   const oneHour = 3600000;
@@ -392,10 +387,146 @@ setInterval(() => {
   }
 }, 3600000);
 
+const changeLMSPassword = async (req, res) => {
+  console.log('Changing LMS password for user:', req.body.userId);
+  const { userId, currentPassword, newPassword } = req.body;
+
+  try {
+    const User = require('../models/User');
+    const user = await User.findOne({ email: userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const client = createLMSClient();
+    const loginUrl = 'https://uphslms.com/login/index.php';
+    
+    // Login first
+    console.log('Logging in...');
+    const loginPage = await client.get(loginUrl);
+    let $ = cheerio.load(loginPage.data);
+    let logintoken = $('input[name="logintoken"]').val();
+    
+    await client.post(loginUrl,
+      new URLSearchParams({
+        username: user.lmsUsername,
+        password: currentPassword,
+        logintoken: logintoken,
+        anchor: ''
+      }), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+    
+    console.log('Logged in successfully');
+    
+    // Get the actual user ID from profile
+    const profilePage = await client.get('https://uphslms.com/user/profile.php');
+    const profileMatch = profilePage.data.match(/userid=(\d+)/i);
+    let actualUserId = profileMatch ? profileMatch[1] : '24937';
+    console.log('Actual User ID:', actualUserId);
+    
+    const preferencesUrl = `https://uphslms.com/user/preferences.php?userid=${actualUserId}`;
+    console.log('Fetching preferences page:', preferencesUrl);
+    
+    const preferencesPage = await client.get(preferencesUrl);
+    $ = cheerio.load(preferencesPage.data);
+    
+    // Get sesskey from URL
+    let sesskey = null;
+    const sesskeyMatch = preferencesPage.data.match(/sesskey=([a-zA-Z0-9]+)/);
+    if (sesskeyMatch) {
+      sesskey = sesskeyMatch[1];
+    }
+    console.log('Sesskey:', sesskey);
+    
+    // Get all hidden fields from the form
+    const formData = new URLSearchParams();
+    
+    // Add all hidden inputs from the page
+    $('input[type="hidden"]').each((i, input) => {
+      const name = $(input).attr('name');
+      const value = $(input).val();
+      if (name && value) {
+        formData.append(name, value);
+        console.log(`Hidden field: ${name} = ${value}`);
+      }
+    });
+    
+    // Add the password fields
+    formData.append('password', currentPassword);
+    formData.append('newpassword1', newPassword);
+    formData.append('newpassword2', newPassword);
+    formData.append('logoutothersessions', '1');
+    formData.append('submitbutton', 'Save changes');
+    
+    // Also try to add the user id if not already added
+    if (!formData.has('id')) {
+      formData.append('id', actualUserId);
+    }
+    
+    console.log('Submitting with fields:', Array.from(formData.keys()));
+    
+    const submitResponse = await client.post(preferencesUrl, formData.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': preferencesUrl,
+        'Origin': 'https://uphslms.com',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15'
+      },
+      maxRedirects: 5,
+      validateStatus: (status) => status < 400
+    });
+    
+    const responseHtml = submitResponse.data;
+    const finalUrl = submitResponse.request?.res?.responseUrl || preferencesUrl;
+    
+    console.log('Response status:', submitResponse.status);
+    console.log('Final URL:', finalUrl);
+    
+    // Check the response for success or error
+    const $response = cheerio.load(responseHtml);
+    
+    // Look for success message
+    const successMessage = $response('.alert-success').text();
+    const errorMessage = $response('.alert-danger').text();
+    
+    if (successMessage && successMessage.includes('password')) {
+      console.log('✅ Password changed successfully!');
+      user.lmsPassword = newPassword;
+      await user.save();
+      return res.json({ success: true, message: 'Password changed successfully' });
+    }
+    
+    if (errorMessage) {
+      console.log('❌ Error message:', errorMessage);
+      return res.status(400).json({ success: false, error: errorMessage });
+    }
+    
+    // Check if we were redirected back to preferences (usually means success)
+    if (finalUrl.includes('preferences.php') && !responseHtml.includes('alert-danger')) {
+      console.log('✅ Likely success - redirected to preferences');
+      user.lmsPassword = newPassword;
+      await user.save();
+      return res.json({ success: true, message: 'Password changed successfully' });
+    }
+    
+    console.log('❌ Failed - no success indicator');
+    res.status(400).json({ success: false, error: 'Failed to change password' });
+    
+  } catch (error) {
+    console.error('Error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
 module.exports = {
   lmsLogin,
   verifyLMSCredentials,
   autoLoginLMS,
   getCourses,
-  getCourseContents 
+  getCourseContents,
+  changeLMSPassword
 };

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/lms_service.dart';
- 
+
 class CourseContentsPage extends StatefulWidget {
   final String courseName;
   final String courseUrl;
@@ -28,7 +28,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     super.initState();
     _loadContents();
   }
-  // US-06-T-02: Data Scrape Script
+
   Future<void> _loadContents() async {
     setState(() {
       _loading = true;
@@ -36,14 +36,17 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     });
 
     try {
-      final contents = await widget.lmsService.getCourseContents(widget.courseUrl);
+      final contents = await widget.lmsService.getCourseContents(
+        widget.courseUrl,
+      );
 
       setState(() {
         _courseContents = contents;
         _loading = false;
 
         // Auto-expand first section if available
-        if (contents.sections.isNotEmpty && contents.sections.first.activities.isNotEmpty) {
+        if (contents.sections.isNotEmpty &&
+            contents.sections.first.activities.isNotEmpty) {
           _expandedSections.add(contents.sections.first.id);
         }
       });
@@ -92,14 +95,13 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
           children: [
             Text(
               widget.courseName,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            if (!_loading && _courseContents != null && _courseContents!.courseTitle.isNotEmpty)
+            if (!_loading &&
+                _courseContents != null &&
+                _courseContents!.courseTitle.isNotEmpty)
               Text(
                 _courseContents!.courseTitle,
                 style: const TextStyle(
@@ -114,7 +116,9 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          if (!_loading && _courseContents != null && _courseContents!.sections.isNotEmpty)
+          if (!_loading &&
+              _courseContents != null &&
+              _courseContents!.sections.isNotEmpty)
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
               onSelected: (value) {
@@ -160,13 +164,15 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               ],
             ),
         ],
-        bottom: _loading ? const PreferredSize(
-          preferredSize: Size.fromHeight(2),
-          child: LinearProgressIndicator(
-            backgroundColor: Colors.white24,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-          ),
-        ) : null,
+        bottom: _loading
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(2),
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.white24,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : null,
       ),
       body: _buildBody(),
     );
@@ -193,11 +199,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red[300],
-            ),
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
             const SizedBox(height: 16),
             Text(
               _errorMessage!,
@@ -224,26 +226,16 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.folder_open,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.folder_open, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             const Text(
               'No Content Available',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               'This course has no sections or activities',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -263,10 +255,14 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
 
     // Calculate statistics
     int totalActivities = _courseContents!.sections.fold(
-        0, (sum, section) => sum + section.activities.length
+      0,
+      (sum, section) => sum + section.activities.length,
     );
     int completedActivities = _courseContents!.sections.fold(
-        0, (sum, section) => sum + section.activities.where((a) => a.completionStatus == 'done').length
+      0,
+      (sum, section) =>
+          sum +
+          section.activities.where((a) => a.completionStatus == 'done').length,
     );
 
     return Column(
@@ -284,22 +280,14 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                 value: '$totalActivities',
                 color: Colors.blue,
               ),
-              Container(
-                height: 30,
-                width: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 30, width: 1, color: Colors.grey[300]),
               _buildStatChip(
                 icon: Icons.check_circle,
                 label: 'Completed',
                 value: '$completedActivities',
                 color: Colors.green,
               ),
-              Container(
-                height: 30,
-                width: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 30, width: 1, color: Colors.grey[300]),
               _buildStatChip(
                 icon: Icons.folder,
                 label: 'Sections',
@@ -347,17 +335,11 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
           children: [
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -367,18 +349,20 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
 
   Widget _buildSectionCard(CourseSection section) {
     // Filter out activities with no name
-    final activities = section.activities.where((a) => a.name.isNotEmpty).toList();
+    final activities = section.activities
+        .where((a) => a.name.isNotEmpty)
+        .toList();
     if (activities.isEmpty) return const SizedBox.shrink();
 
     final isExpanded = _expandedSections.contains(section.id);
-    final completedInSection = activities.where((a) => a.completionStatus == 'done').length;
+    final completedInSection = activities
+        .where((a) => a.completionStatus == 'done')
+        .length;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           // Section Header
@@ -389,7 +373,9 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.grey[50],
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
               ),
               child: Row(
                 children: [
@@ -476,7 +462,10 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               itemCount: activities.length,
               itemBuilder: (context, index) {
                 final activity = activities[index];
-                return _buildActivityTile(activity, index < activities.length - 1);
+                return _buildActivityTile(
+                  activity,
+                  index < activities.length - 1,
+                );
               },
             ),
         ],
@@ -494,7 +483,10 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _getActivityColor(activity.type, activity.badge).withOpacity(0.1),
+                color: _getActivityColor(
+                  activity.type,
+                  activity.badge,
+                ).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
@@ -516,9 +508,15 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                 ),
                 if (activity.badge != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: _getActivityColor(activity.type, activity.badge).withOpacity(0.1),
+                      color: _getActivityColor(
+                        activity.type,
+                        activity.badge,
+                      ).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -539,15 +537,15 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                   children: [
                     Text(
                       activity.type.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                     if (activity.isIndented) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
                           borderRadius: BorderRadius.circular(2),
@@ -564,35 +562,36 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                   ],
                 ),
                 if (activity.dates.isNotEmpty)
-                  ...activity.dates.map((date) => Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      date,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.orange,
+                  ...activity.dates.map(
+                    (date) => Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        date,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.orange,
+                        ),
                       ),
                     ),
-                  )),
+                  ),
               ],
             ),
             trailing: _buildCompletionIndicator(activity.completionStatus),
             onTap: activity.url != null
                 ? () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Opening ${activity.type}...'),
-                  duration: const Duration(seconds: 1),
-                  backgroundColor: const Color(0xFF9D2BD1),
-                ),
-              );
-              // Here you can add navigation to open the activity URL
-              // You might want to open it in a WebView or browser
-            }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Opening ${activity.type}...'),
+                        duration: const Duration(seconds: 1),
+                        backgroundColor: const Color(0xFF9D2BD1),
+                      ),
+                    );
+                    // Here you can add navigation to open the activity URL
+                    // You might want to open it in a WebView or browser
+                  }
                 : null,
           ),
-          if (showDivider)
-            const Divider(indent: 56),
+          if (showDivider) const Divider(indent: 56),
         ],
       ),
     );
@@ -607,11 +606,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
             color: Colors.green.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.check_circle,
-            color: Colors.green,
-            size: 20,
-          ),
+          child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
         );
       case 'todo':
         return Container(

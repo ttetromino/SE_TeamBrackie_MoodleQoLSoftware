@@ -12,14 +12,16 @@ const {
   enableBiometricLogin,
   disableBiometricLogin,
   biometricLogin,
-  getBiometricStatus
+  getBiometricStatus,
+  changeAppPassword
 } = require('./controllers/authController');
 
 const { 
   lmsLogin, 
   verifyLMSCredentials,
   getCourses, 
-  getCourseContents
+  getCourseContents,
+  changeLMSPassword 
 } = require('./controllers/lmsController');
 
 const app = express();
@@ -40,12 +42,17 @@ app.post('/api/lms/auto-login', autoLoginLMS);
 app.post('/api/lms/courses', getCourses);
 app.post('/api/lms/course-contents', getCourseContents); 
 app.put('/api/user/lms-credentials', updateLMSCredentials);
+app.post('/api/lms/change-password', changeLMSPassword);
+app.post('/api/user/change-password', changeAppPassword);
 
 // Biometric routes
 app.post('/api/biometric/enable', enableBiometricLogin);
 app.post('/api/biometric/disable', disableBiometricLogin);
 app.post('/api/biometric/login', biometricLogin);
 app.get('/api/biometric/status/:email', getBiometricStatus);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Test route
 app.get('/', (req, res) => {

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-// US-01-T-03: Designing Database Schema
+
 const userSchema = new mongoose.Schema({
   name: { 
     type: String, 
@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  // US-01-T-02: Biometrics Verification 
+  // Biometric fields
   biometricEnabled: {
     type: Boolean,
     default: false
@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Hash passwords before saving
+// Only hash the main app password, NOT the LMS password
 userSchema.pre('save', async function() {
   console.log('Pre-save hook triggered');
   
@@ -61,24 +61,11 @@ userSchema.pre('save', async function() {
     this.password = await bcrypt.hash(this.password, salt);
   }
   
-  if (this.isModified('lmsPassword')) {
-    console.log('Hashing LMS password');
-    const salt = await bcrypt.genSalt(10);
-    this.lmsPassword = await bcrypt.hash(this.lmsPassword, salt);
-  }
+  // Remove LMS password hashing - store as plain text
+  // LMS password needs to be plain text to login to uphslms.com
   
   console.log('Pre-save hook completed');
 });
-
-// Method to compare LMS password
-userSchema.methods.compareLMSPassword = async function(candidatePassword) {
-  try {
-    return await bcrypt.compare(candidatePassword, this.lmsPassword);
-  } catch (error) {
-    console.error('Error comparing LMS password:', error);
-    return false;
-  }
-};
 
 // Method to compare main password
 userSchema.methods.comparePassword = async function(candidatePassword) {

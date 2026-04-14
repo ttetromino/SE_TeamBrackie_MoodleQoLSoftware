@@ -31,9 +31,9 @@ class _SignupPageState extends State<SignupPage> {
     super.initState();
     _checkBiometricAvailability();
   }
-  
+
   // US-01-T-02: Biometrics Verification
-  
+
   Future<void> _checkBiometricAvailability() async {
     final available = await _biometricService.isBiometricAvailable();
     print('🔍 Biometric available: $available');
@@ -50,8 +50,11 @@ class _SignupPageState extends State<SignupPage> {
     final String lmsPassword = lmsPasswordController.text.trim();
 
     // Validate all fields
-    if (name.isEmpty || email.isEmpty || password.isEmpty ||
-        lmsUsername.isEmpty || lmsPassword.isEmpty) {
+    if (name.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        lmsUsername.isEmpty ||
+        lmsPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('All fields are required including LMS credentials'),
@@ -83,7 +86,9 @@ class _SignupPageState extends State<SignupPage> {
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('LMS login failed. Please check your uphslms.com credentials.'),
+          content: Text(
+            'LMS login failed. Please check your uphslms.com credentials.',
+          ),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 4),
         ),
@@ -95,9 +100,13 @@ class _SignupPageState extends State<SignupPage> {
     await _createAccount(name, email, password, lmsUsername, lmsPassword);
   }
 
-  Future<void> _createAccount(String name, String email, String password,
-      String lmsUsername, String lmsPassword) async {
-
+  Future<void> _createAccount(
+    String name,
+    String email,
+    String password,
+    String lmsUsername,
+    String lmsPassword,
+  ) async {
     final Uri url = Uri.parse('http://10.0.2.2:5000/users');
 
     Map<String, dynamic> requestBody = {
@@ -105,7 +114,7 @@ class _SignupPageState extends State<SignupPage> {
       'email': email,
       'password': password,
       'lmsUsername': lmsUsername,
-      'lmsPassword': lmsPassword
+      'lmsPassword': lmsPassword,
     };
 
     print('Creating account...');
@@ -126,7 +135,10 @@ class _SignupPageState extends State<SignupPage> {
 
         print('Attempting immediate LMS login after signup...');
         final lmsService = LMSService(userId: email);
-        bool lmsLoginSuccess = await lmsService.loginToLMS(lmsUsername, lmsPassword);
+        bool lmsLoginSuccess = await lmsService.loginToLMS(
+          lmsUsername,
+          lmsPassword,
+        );
 
         if (lmsLoginSuccess) {
           print('LMS login successful after signup');
@@ -140,7 +152,9 @@ class _SignupPageState extends State<SignupPage> {
           print('LMS login failed after signup');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Signup successful but LMS connection failed. You can try again in the app.'),
+              content: Text(
+                'Signup successful but LMS connection failed. You can try again in the app.',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -169,10 +183,7 @@ class _SignupPageState extends State<SignupPage> {
       print('Signup error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
       setState(() => loading = false);
     }
@@ -184,10 +195,7 @@ class _SignupPageState extends State<SignupPage> {
       final response = await http.post(
         Uri.parse('http://10.0.2.2:5000/api/lms/verify'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
+        body: jsonEncode({'username': username, 'password': password}),
       );
 
       if (response.statusCode == 200) {
@@ -208,7 +216,9 @@ class _SignupPageState extends State<SignupPage> {
     final biometrics = await _biometricService.getAvailableBiometrics();
     String biometricTypeName = 'Biometric';
     if (biometrics.isNotEmpty) {
-      biometricTypeName = _biometricService.getBiometricTypeName(biometrics.first);
+      biometricTypeName = _biometricService.getBiometricTypeName(
+        biometrics.first,
+      );
     }
 
     // Determine icon based on available biometrics
@@ -242,10 +252,7 @@ class _SignupPageState extends State<SignupPage> {
             const SizedBox(height: 20),
             Text(
               'Enable $biometricTypeName Login',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -268,10 +275,7 @@ class _SignupPageState extends State<SignupPage> {
                   Expanded(
                     child: Text(
                       'Your biometric data stays on your device and is never shared with our servers.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green[800],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.green[800]),
                     ),
                   ),
                 ],
@@ -280,10 +284,7 @@ class _SignupPageState extends State<SignupPage> {
             const SizedBox(height: 16),
             Text(
               'You can change this anytime in Settings',
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -317,7 +318,9 @@ class _SignupPageState extends State<SignupPage> {
               // Show setup progress
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Setting up $biometricTypeName authentication...'),
+                  content: Text(
+                    'Setting up $biometricTypeName authentication...',
+                  ),
                   duration: const Duration(seconds: 2),
                 ),
               );
@@ -398,7 +401,9 @@ class _SignupPageState extends State<SignupPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Could not enable biometrics. You can enable it later in settings.'),
+                      content: Text(
+                        'Could not enable biometrics. You can enable it later in settings.',
+                      ),
                       backgroundColor: Colors.orange,
                       duration: Duration(seconds: 3),
                     ),
@@ -436,11 +441,7 @@ class _SignupPageState extends State<SignupPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.check_circle,
-              color: Colors.green,
-              size: 60,
-            ),
+            const Icon(Icons.check_circle, color: Colors.green, size: 60),
             const SizedBox(height: 16),
             Text(
               '$biometricTypeName authentication has been enabled!',
@@ -451,10 +452,7 @@ class _SignupPageState extends State<SignupPage> {
             Text(
               'Next time you login, you can use your $biometricTypeName instead of your password.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -533,7 +531,10 @@ class _SignupPageState extends State<SignupPage> {
                         const SizedBox(width: 8),
                         const Text(
                           'Personal Information',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -596,22 +597,34 @@ class _SignupPageState extends State<SignupPage> {
                         const SizedBox(width: 8),
                         const Text(
                           'LMS Credentials (Required)',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.black.withOpacity(0.3)),
+                        border: Border.all(
+                          color: Colors.black.withOpacity(0.3),
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.info_outline, size: 16, color: Colors.black),
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.black,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Will be verified before account creation',
@@ -678,24 +691,27 @@ class _SignupPageState extends State<SignupPage> {
                 ),
                 child: loading
                     ? const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Text('Verifying credentials...'),
-                  ],
-                )
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Text('Verifying credentials...'),
+                        ],
+                      )
                     : const Text(
-                  'Sign Up',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                        'Sign Up',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
             ),
 

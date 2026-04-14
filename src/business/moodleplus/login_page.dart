@@ -35,7 +35,9 @@ class _LoginPageState extends State<LoginPage> {
     final lastEmail = prefs.getString('last_login_email');
     if (lastEmail != null) {
       emailController.text = lastEmail;
-      final hasBiometric = await _biometricService.isBiometricEnabledForUser(lastEmail);
+      final hasBiometric = await _biometricService.isBiometricEnabledForUser(
+        lastEmail,
+      );
       setState(() {
         _hasBiometricSaved = hasBiometric;
       });
@@ -83,7 +85,9 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         // Check if user has biometric enabled
-        final hasBiometric = await _biometricService.isBiometricEnabledForUser(email);
+        final hasBiometric = await _biometricService.isBiometricEnabledForUser(
+          email,
+        );
 
         if (hasBiometric) {
           setState(() => loading = false);
@@ -118,8 +122,7 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => loading = false);
     }
   }
-  
-  
+
   // US-01-T-02: Biometrics Verification
 
   Future<void> _performBiometricVerification(Map<String, dynamic> user) async {
@@ -134,11 +137,7 @@ class _LoginPageState extends State<LoginPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.fingerprint,
-              size: 60,
-              color: Color(0xFF9D2BD1),
-            ),
+            const Icon(Icons.fingerprint, size: 60, color: Color(0xFF9D2BD1)),
             const SizedBox(height: 16),
             const Text(
               'Please verify your identity',
@@ -293,7 +292,9 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Biometric authentication failed. Please use password.'),
+            content: Text(
+              'Biometric authentication failed. Please use password.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -311,11 +312,7 @@ class _LoginPageState extends State<LoginPage> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFA12DC6),
-              Color(0xFFE06C75),
-              Color(0xFFFADB5F),
-            ],
+            colors: [Color(0xFFA12DC6), Color(0xFFE06C75), Color(0xFFFADB5F)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -325,8 +322,7 @@ class _LoginPageState extends State<LoginPage> {
               return Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (constraints.maxWidth > 600)
-                    const SizedBox(width: 0),
+                  if (constraints.maxWidth > 600) const SizedBox(width: 0),
                   Expanded(
                     child: Container(
                       constraints: const BoxConstraints(maxWidth: 380),
@@ -423,8 +419,8 @@ class _LoginPageState extends State<LoginPage> {
                                 TextButton(
                                   onPressed: () {
                                     Navigator.pushReplacementNamed(
-                                        context,
-                                        '/signup'
+                                      context,
+                                      '/signup',
                                     );
                                   },
                                   style: TextButton.styleFrom(
@@ -452,8 +448,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                   ),
-                  if (constraints.maxWidth > 600)
-                    const SizedBox(width: 100),
+                  if (constraints.maxWidth > 600) const SizedBox(width: 100),
                 ],
               );
             },
@@ -526,10 +521,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         child: const Text(
           'Log In',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );

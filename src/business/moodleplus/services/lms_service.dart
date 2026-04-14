@@ -9,23 +9,67 @@ class LMSService {
 
   LMSService({required this.userId});
 
-  // Login to uphslms.com
-  Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
+  Future<Map<String, dynamic>> changeLMSPasswordWithDetails(
+    String email,
+    String currentPassword,
+    String newPassword,
+  ) async {
     try {
-      print('Attempting LMS login for: $lmsUsername');
+      print('Changing LMS password for: $email');
       final response = await http.post(
-        Uri.parse('$baseUrl/api/lms/login'),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
+        Uri.parse('$baseUrl/api/lms/change-password'),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'username': lmsUsername,
-          'password': lmsPassword,
+          'userId': userId,
+          'email': email,
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
         }),
       );
 
-      print('LMS login response: ${response.statusCode}');
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password changed',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to change password',
+        };
+      }
+    } catch (e) {
+      debugPrint('Change LMS password error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<bool> changeLMSPassword(
+    String email,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final result = await changeLMSPasswordWithDetails(
+      email,
+      currentPassword,
+      newPassword,
+    );
+    return result['success'] == true;
+  }
+
+  // Login to uphslms.com
+  Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
+    try {
+      print('🔐 Attempting LMS login for: $lmsUsername');
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/lms/login'),
+        headers: {'Content-Type': 'application/json', 'x-user-id': userId},
+        body: jsonEncode({'username': lmsUsername, 'password': lmsPassword}),
+      );
+
+      print('📥 LMS login response: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -58,7 +102,7 @@ class LMSService {
       return false;
     }
   }
-    //     US-06-T-02: Data Scrape Script
+
   // Get courses from LMS
   Future<List<LmsCourse>> getCourses() async {
     try {
@@ -82,17 +126,14 @@ class LMSService {
       return [];
     }
   }
-    //     US-06-T-02: Data Scrape Script
+
   // Get course contents (sections and activities)
   Future<CourseContents> getCourseContents(String courseUrl) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/course-contents'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'userId': userId,
-          'courseUrl': courseUrl,
-        }),
+        body: jsonEncode({'userId': userId, 'courseUrl': courseUrl}),
       );
 
       if (response.statusCode == 200) {
@@ -106,7 +147,7 @@ class LMSService {
     }
   }
 }
- //     US-06-T-02: Data Scrape Script
+
 // Course Models
 class LmsCourse {
   final String id;
@@ -135,10 +176,7 @@ class CourseContents {
   final String courseTitle;
   final List<CourseSection> sections;
 
-  CourseContents({
-    required this.courseTitle,
-    required this.sections,
-  });
+  CourseContents({required this.courseTitle, required this.sections});
 
   factory CourseContents.fromJson(Map<String, dynamic> json) {
     return CourseContents(

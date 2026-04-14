@@ -61,6 +61,9 @@ const signup = async (req, res) => {
     });
   }
 };
+
+// US-01-T-05: Create Login
+// Login
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -137,8 +140,7 @@ const autoLoginLMS = async (req, res) => {
     
     // First check in-memory session
     const session = userSessions.get(userId);
-
-    if (session) {
+    if (session && session.cookies) {
       console.log('Found in-memory session');
       // Check if session is still valid
       const client = createLMSClient(session.cookies);
@@ -326,6 +328,34 @@ const getBiometricStatus = async (req, res) => {
   }
 };
 
+const changeAppPassword = async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValid = await user.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash and save new password
+    const bcrypt = require('bcrypt');
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+    
+    res.json({ success: true, message: 'App password changed successfully' });
+  } catch (err) {
+    console.error('Change app password error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = { 
   signup, 
   login, 
@@ -334,8 +364,6 @@ module.exports = {
   enableBiometricLogin,
   disableBiometricLogin,
   biometricLogin,
-  getBiometricStatus
+  getBiometricStatus,
+  changeAppPassword
 };
-
-module.exports = { signup, login, updateLMSCredentials, autoLoginLMS };
-
