@@ -19,37 +19,55 @@ const userSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
-  lmsPassword: { type: String, required: true }
+  lmsPassword: { 
+    type: String, 
+    required: true 
+  },
+  // Session persistence fields
+  lmsCookies: {
+    type: [String],
+    default: []
+  },
+  lmsSessionExpiry: {
+    type: Date,
+    default: null
+  },
+  lmsLastLogin: {
+    type: Date,
+    default: null
+  },
+  // Biometric fields
+  biometricEnabled: {
+    type: Boolean,
+    default: false
+  },
+  biometricToken: {
+    type: String,
+    default: null
+  },
+  biometricEnabledAt: {
+    type: Date,
+    default: null
+  }
 });
 
-// Hash passwords before saving - WITHOUT using next parameter
+// Only hash the main app password, NOT the LMS password
 userSchema.pre('save', async function() {
   console.log('Pre-save hook triggered');
   
-
   if (this.isModified('password')) {
     console.log('Hashing main password');
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
   
-  
+  // Remove LMS password hashing - store as plain text
+  // LMS password needs to be plain text to login to uphslms.com
   
   console.log('Pre-save hook completed');
-  // No next() needed - mongoose handles it automatically
 });
 
-// Method to compare LMS password
-userSchema.methods.compareLMSPassword = async function(candidatePassword) {
-  try {
-    return await bcrypt.compare(candidatePassword, this.lmsPassword);
-  } catch (error) {
-    console.error('Error comparing LMS password:', error);
-    return false;
-  }
-};
-
-// Method to compare main password (if needed)
+// Method to compare main password
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
     return await bcrypt.compare(candidatePassword, this.password);

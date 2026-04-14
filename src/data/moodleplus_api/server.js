@@ -2,13 +2,26 @@ const express = require('express');
 require('dotenv').config();
 
 const connectDB = require('./config/db');
-const { signup, login, updateLMSCredentials } = require('./controllers/authController');
+const { startSessionCleanup } = require('./utils/sessionStore');
+
+const { 
+  signup, 
+  login, 
+  updateLMSCredentials,
+  autoLoginLMS,
+  enableBiometricLogin,
+  disableBiometricLogin,
+  biometricLogin,
+  getBiometricStatus,
+  changeAppPassword
+} = require('./controllers/authController');
+
 const { 
   lmsLogin, 
   verifyLMSCredentials,
-  autoLoginLMS,
   getCourses, 
-  getCourseContents  // Changed from getCourseFiles
+  getCourseContents,
+  changeLMSPassword 
 } = require('./controllers/lmsController');
 
 const app = express();
@@ -16,6 +29,9 @@ app.use(express.json());
 
 // Connect to MongoDB
 connectDB();
+
+// Start session cleanup
+startSessionCleanup();
 
 // Routes
 app.post('/users', signup);
@@ -26,6 +42,17 @@ app.post('/api/lms/auto-login', autoLoginLMS);
 app.post('/api/lms/courses', getCourses);
 app.post('/api/lms/course-contents', getCourseContents); 
 app.put('/api/user/lms-credentials', updateLMSCredentials);
+app.post('/api/lms/change-password', changeLMSPassword);
+app.post('/api/user/change-password', changeAppPassword);
+
+// Biometric routes
+app.post('/api/biometric/enable', enableBiometricLogin);
+app.post('/api/biometric/disable', disableBiometricLogin);
+app.post('/api/biometric/login', biometricLogin);
+app.get('/api/biometric/status/:email', getBiometricStatus);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Test route
 app.get('/', (req, res) => {
