@@ -154,14 +154,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   // US-03-T-01: User Change Credentials - Update email
-  Future<bool> _updateEmail() async {
+  Future<Map<String, dynamic>?> _updateEmail() async {
     if (_emailController.text == widget.user['email']) {
-      return true; // No change needed
+      return widget.user;
     }
 
     if (!_isEmailValid) {
       _showSnackBar('Please enter a valid email address', Colors.red);
-      return false;
+      return null;
     }
 
     if (_currentPasswordController.text.isEmpty) {
@@ -169,33 +169,40 @@ class _EditProfilePageState extends State<EditProfilePage> {
         'Please enter your current password to update email',
         Colors.red,
       );
-      return false;
+      return null;
     }
 
     try {
+      print('Sending email update request...');
+      print('Old email: ${widget.user['email']}');
+      print('New email: ${_emailController.text}');
+
       final response = await http.put(
         Uri.parse('$baseUrl/api/user/email'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': widget.user['email'],
-          'newEmail': _emailController.text,
-          'password': _currentPasswordController.text,
+          'email': widget.user['email'], // Current email
+          'newEmail': _emailController.text.trim(), // New email
+          'password':
+              _currentPasswordController.text, // Current password for auth
         }),
       );
 
       final data = jsonDecode(response.body);
+      print('Update email response status: ${response.statusCode}');
+      print('Update email response body: ${response.body}');
 
       if (response.statusCode == 200) {
         _showSnackBar('Email updated successfully!', Colors.green);
-        return true;
+        return data['user']; // Return the updated user data from server
       } else {
         _showSnackBar(data['error'] ?? 'Failed to update email', Colors.red);
-        return false;
+        return null;
       }
     } catch (e) {
       print('Update email error: $e');
-      _showSnackBar('Connection error', Colors.red);
-      return false;
+      _showSnackBar('Connection error: $e', Colors.red);
+      return null;
     }
   }
 
@@ -221,6 +228,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     try {
+      print('Changing app password for: ${widget.user['email']}');
+      print('New password length: ${_newPasswordController.text.length}');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/user/change-password'),
         headers: {'Content-Type': 'application/json'},
@@ -232,9 +242,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
 
       final data = jsonDecode(response.body);
+      print('Change password response: ${response.body}');
 
-      if (response.statusCode == 200) {
-        _showSnackBar('Password updated successfully!', Colors.green);
+      if (response.statusCode == 200 && data['success'] == true) {
+        _showSnackBar('App password updated successfully!', Colors.green);
         return true;
       } else {
         _showSnackBar(data['error'] ?? 'Failed to update password', Colors.red);
@@ -242,7 +253,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       }
     } catch (e) {
       print('Update password error: $e');
-      _showSnackBar('Connection error', Colors.red);
+      _showSnackBar('Connection error: $e', Colors.red);
       return false;
     }
   }
@@ -295,16 +306,45 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Future<void> _saveChanges() async {
     setState(() => _isLoading = true);
 
-    // Update all changed fields
-    final emailSuccess = await _updateEmail();
+    Map<String, dynamic> updatedUserData = {
+      'name': _nameController.text,
+      'email': widget.user['email'], // Start with current email
+      'lmsUsername': widget.user['lmsUsername'],
+    };
+
+    // Update email and get updated user data
+    final emailResult = await _updateEmail();
+    if (emailResult != null) {
+      updatedUserData = emailResult; // Use the updated user data from server
+    } else if (_emailController.text != widget.user['email']) {
+      // Email update failed
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // Update app password
     final passwordSuccess = await _updateAppPassword();
+    if (!passwordSuccess && _newPasswordController.text.isNotEmpty) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    // Update profile picture
     final pictureSuccess = await _updateProfilePicture();
+    if (!pictureSuccess && _profilePictureBase64 != null) {
+      setState(() => _isLoading = false);
+      return;
+    }
 
     setState(() => _isLoading = false);
 
-    if (emailSuccess && passwordSuccess && pictureSuccess) {
-      // US-03-T-02: Notify user of successful update via popup
-      _showSuccessDialog();
+    if (emailResult != null || (passwordSuccess && pictureSuccess)) {
+      // Add profile picture to updated data if changed
+      if (_profilePictureBase64 != null) {
+        updatedUserData['profilePicture'] = _profilePictureBase64;
+      }
+
+      _showSuccessDialog(updatedUserData);
     } else {
       _showSnackBar(
         'Some changes could not be saved. Please try again.',
@@ -314,7 +354,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   // US-03-T-02: Show success popup notification
-  void _showSuccessDialog() {
+  void _showSuccessDialog(Map<String, dynamic> updatedUserData) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -345,15 +385,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // US-03-T-02: Return updated user data
-              widget.onProfileUpdated({
-                'name': _nameController.text,
-                'email': _emailController.text,
-                'lmsUsername': widget.user['lmsUsername'],
-                'profilePicture': _profilePictureBase64,
-              });
-              Navigator.pop(context, true); // Return to previous page
+              Navigator.pop(context);
+              // Pass the updated user data back to home page
+              widget.onProfileUpdated(updatedUserData);
+              Navigator.pop(context, true);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF9D2BD1),
