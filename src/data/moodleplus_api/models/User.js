@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  // US-03: Add profile picture field
+  profilePicture: {
+    type: String,
+    default: null
+  },
   // Session persistence fields
   lmsCookies: {
     type: [String],
@@ -49,7 +54,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   }
-});
+}, { timestamps: true });
 
 // Only hash the main app password, NOT the LMS password
 userSchema.pre('save', async function() {

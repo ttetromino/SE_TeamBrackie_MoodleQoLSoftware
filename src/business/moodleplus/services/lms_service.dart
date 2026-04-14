@@ -9,11 +9,12 @@ class LMSService {
 
   LMSService({required this.userId});
 
+
   Future<Map<String, dynamic>> changeLMSPasswordWithDetails(
-    String email,
-    String currentPassword,
-    String newPassword,
-  ) async {
+      String email,
+      String currentPassword,
+      String newPassword,
+      ) async {
     try {
       print('Changing LMS password for: $email');
       print('Current password length: ${currentPassword.length}');
@@ -51,16 +52,8 @@ class LMSService {
     }
   }
 
-  Future<bool> changeLMSPassword(
-    String email,
-    String currentPassword,
-    String newPassword,
-  ) async {
-    final result = await changeLMSPasswordWithDetails(
-      email,
-      currentPassword,
-      newPassword,
-    );
+  Future<bool> changeLMSPassword(String email, String currentPassword, String newPassword) async {
+    final result = await changeLMSPasswordWithDetails(email, currentPassword, newPassword);
     return result['success'] == true;
   }
 
@@ -70,8 +63,14 @@ class LMSService {
       print('🔐 Attempting LMS login for: $lmsUsername');
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/login'),
-        headers: {'Content-Type': 'application/json', 'x-user-id': userId},
-        body: jsonEncode({'username': lmsUsername, 'password': lmsPassword}),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': userId,
+        },
+        body: jsonEncode({
+          'username': lmsUsername,
+          'password': lmsPassword,
+        }),
       );
 
       print('📥 LMS login response: ${response.statusCode}');
@@ -138,7 +137,10 @@ class LMSService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/course-contents'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': userId, 'courseUrl': courseUrl}),
+        body: jsonEncode({
+          'userId': userId,
+          'courseUrl': courseUrl,
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -181,7 +183,10 @@ class CourseContents {
   final String courseTitle;
   final List<CourseSection> sections;
 
-  CourseContents({required this.courseTitle, required this.sections});
+  CourseContents({
+    required this.courseTitle,
+    required this.sections,
+  });
 
   factory CourseContents.fromJson(Map<String, dynamic> json) {
     return CourseContents(

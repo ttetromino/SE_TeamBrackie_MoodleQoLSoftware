@@ -1,8 +1,13 @@
+// /lib/home_page.dart
+
 import 'package:flutter/material.dart';
+import 'dart:convert'; // US-03: Add this for jsonEncode
+import 'package:shared_preferences/shared_preferences.dart'; // US-03: Add this
 import 'services/lms_service.dart';
 import 'course_contents_page.dart';
 import 'services/biometric_service.dart';
 import 'change_lms_password_page.dart';
+import 'edit_profile_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -37,7 +42,6 @@ class _HomePageState extends State<HomePage>
     _tabController = TabController(length: 2, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
 
-    // Auto-login to LMS immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLoginToLMS();
     });
@@ -48,6 +52,52 @@ class _HomePageState extends State<HomePage>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // US-03: Navigate to Edit Profile
+  // US-03: Navigate to Edit Profile
+  Future<void> _navigateToEditProfile() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(
+          user: widget.user,
+          onProfileUpdated: (updatedUser) {
+            // COMPLETELY REPLACE the user object with the updated one
+            setState(() {
+              widget.user['name'] = updatedUser['name'];
+              widget.user['email'] = updatedUser['email'];
+              widget.user['lmsUsername'] = updatedUser['lmsUsername'];
+              if (updatedUser['profilePicture'] != null) {
+                widget.user['profilePicture'] = updatedUser['profilePicture'];
+              }
+            });
+
+            // Also update stored user data
+            _updateStoredUser(widget.user);
+
+            // Show a snackbar confirming the update
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profile updated successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadCourses();
+    }
+  }
+
+  // US-03: Update stored user data (ONLY ONE METHOD - remove the duplicate)
+  Future<void> _updateStoredUser(Map<String, dynamic> updatedUser) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_data', jsonEncode(updatedUser));
   }
 
   // Auto-login to LMS
@@ -70,8 +120,6 @@ class _HomePageState extends State<HomePage>
       _loadCourses();
     } else {
       print('⚠️ Auto-login failed - no valid session');
-
-      // Try one more time with a small delay
       await Future.delayed(const Duration(seconds: 1));
       print('🔄 Retrying auto-login...');
       bool retrySuccess = await _lmsService.autoLoginLMS();
@@ -269,9 +317,6 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  // US-01-T-02: Biometrics Verification
-  // Check biometric status
-
   Future<void> _checkBiometricStatus() async {
     final available = await _biometricService.isBiometricAvailable();
     final enabled = await _biometricService.isBiometricEnabledForUser(
@@ -283,7 +328,6 @@ class _HomePageState extends State<HomePage>
     });
   }
 
-  // Toggle biometric
   Future<void> _toggleBiometric(bool value) async {
     if (value) {
       final enabled = await _biometricService.enableBiometric(
@@ -328,6 +372,19 @@ class _HomePageState extends State<HomePage>
         title: const Text('MoodlePlus Home'),
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
+        actions: [
+          // US-03: Edit Profile button
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: _navigateToEditProfile,
+            tooltip: 'Edit Profile',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _showLogoutConfirmation,
+            tooltip: 'Logout',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -338,13 +395,6 @@ class _HomePageState extends State<HomePage>
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _showLogoutConfirmation,
-            tooltip: 'Logout',
-          ),
-        ],
       ),
       body: TabBarView(
         controller: _tabController,
