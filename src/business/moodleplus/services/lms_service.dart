@@ -16,6 +16,9 @@ class LMSService {
   ) async {
     try {
       print('Changing LMS password for: $email');
+      print('Current password length: ${currentPassword.length}');
+      print('New password length: ${newPassword.length}');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/change-password'),
         headers: {'Content-Type': 'application/json'},
@@ -28,6 +31,8 @@ class LMSService {
       );
 
       final data = jsonDecode(response.body);
+      print('Change password response status: ${response.statusCode}');
+      print('Change password response: ${response.body}');
 
       if (response.statusCode == 200) {
         return {
