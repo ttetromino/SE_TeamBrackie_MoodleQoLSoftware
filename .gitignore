@@ -4,15 +4,3 @@
 build/
 .flutter-plugins-dependencies
 pubspec.lock
-src/business/moodleplus/.gitignore
-src/business/moodleplus/.metadata
-src/business/moodleplus/README.md
-src/business/moodleplus/analysis_options.yaml
-src/business/moodleplus/android/
-src/business/moodleplus/ios/
-src/business/moodleplus/lib/
-src/business/moodleplus/linux/
-src/business/moodleplus/macos/
-src/business/moodleplus/test/
-src/business/moodleplus/web/
-src/business/moodleplus/windows/
