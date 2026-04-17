@@ -29,6 +29,9 @@ class _HomePageState extends State<HomePage>
   List<LmsCourse> _courses = [];
   String? _lmsErrorMessage;
 
+  // US-07: Course Stats
+  CourseStats _stats = CourseStats();
+
   final BiometricService _biometricService = BiometricService();
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
@@ -149,8 +152,11 @@ class _HomePageState extends State<HomePage>
 
     List<LmsCourse> courses = await _lmsService.getCourses();
 
+    CourseStats stats = await _lmsService.getAllCoursesStats(courses);
+
     setState(() {
       _courses = courses;
+      _stats = stats;
       _lmsLoading = false;
     });
 
@@ -852,9 +858,20 @@ class _HomePageState extends State<HomePage>
       color: const Color(0xFF9D2BD1),
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
-        itemCount: _courses.length,
+        itemCount: _courses.length + 1,
         itemBuilder: (context, index) {
-          final course = _courses[index];
+          if (index == 0) {
+            return _buildProgressWidget(
+              totalTasks: _stats.totalTasks,
+              completedTasks: _stats.completedTasks,
+              totalQuizzes: _stats.totalQuizzes,
+              completedQuizzes: _stats.completedQuizzes,
+              totalAssignments: _stats.totalAssignments,
+              completedAssignments: _stats.completedAssignments,
+            );
+          }
+
+          final course = _courses[index - 1];
           return _buildCourseCard(course);
         },
       ),
@@ -947,6 +964,136 @@ class _HomePageState extends State<HomePage>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // US-07: Progress Tracker
+  Widget _buildProgressWidget({
+    required int totalTasks,
+    required int completedTasks,
+    required int totalQuizzes,
+    required int completedQuizzes,
+    required int totalAssignments,
+    required int completedAssignments,
+  }) {
+    int total = totalTasks + totalQuizzes + totalAssignments;
+    int completed = completedTasks + completedQuizzes + completedAssignments;
+
+    double percent = total == 0 ? 0 : completed / total;
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 70,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: Text(
+                "${(percent * 100).toInt()}%",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProgressRow(
+                  "New Tasks Today",
+                  totalTasks - completedTasks,
+                  Colors.red,
+                ),
+                _buildProgressRow(
+                  "Upcoming Quiz",
+                  totalQuizzes - completedQuizzes,
+                  Colors.orange,
+                ),
+                _buildProgressRow(
+                  "Assignments",
+                  totalAssignments - completedAssignments,
+                  Colors.purple,
+                ),
+                const SizedBox(height: 8),
+
+                // US-07: PROGRESS BAR
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      children: [
+                        Container(
+                          height: 10,
+                          color: const Color(0xFF9D2BD1),
+                        ),
+
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: percent,
+                          child: Container(
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red,
+                                  Colors.orange,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressRow(String title, int count, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            "$count ",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(title),
+        ],
       ),
     );
   }
