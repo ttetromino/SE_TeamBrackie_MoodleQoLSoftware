@@ -34,8 +34,8 @@ class _ChangeLMSPasswordPageState extends State<ChangeLMSPasswordPage> {
     try {
       final result = await widget.lmsService.changeLMSPasswordWithDetails(
         widget.email,
-        _currentPasswordController.text,
-        _newPasswordController.text,
+        _currentPasswordController.text.trim(),
+        _newPasswordController.text.trim(),
       );
 
       if (!mounted) return;
