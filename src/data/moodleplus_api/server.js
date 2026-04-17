@@ -13,7 +13,10 @@ const {
   disableBiometricLogin,
   biometricLogin,
   getBiometricStatus,
-  changeAppPassword
+  changeAppPassword,
+  updateEmail,         
+  updateProfilePicture, 
+  getProfile          
 } = require('./controllers/authController');
 
 const { 
@@ -32,6 +35,11 @@ connectDB();
 
 // Start session cleanup
 startSessionCleanup();
+
+// US-03: Edit Profile Feature
+app.get('/api/user/profile/:email', getProfile);
+app.put('/api/user/email', updateEmail);
+app.put('/api/user/profile-picture', updateProfilePicture);
 
 // Routes
 app.post('/users', signup);
