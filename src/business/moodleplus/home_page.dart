@@ -1,6 +1,13 @@
+// /lib/home_page.dart
+
 import 'package:flutter/material.dart';
+import 'dart:convert'; // US-03: Add this for jsonEncode
+import 'package:shared_preferences/shared_preferences.dart'; // US-03: Add this
 import 'services/lms_service.dart';
 import 'course_contents_page.dart';
+import 'services/biometric_service.dart';
+import 'change_lms_password_page.dart';
+import 'edit_profile_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -11,7 +18,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late LMSService _lmsService;
 
@@ -21,16 +29,26 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   List<LmsCourse> _courses = [];
   String? _lmsErrorMessage;
 
+  // US-07: Course Stats
+  CourseStats _stats = CourseStats();
+
+  final BiometricService _biometricService = BiometricService();
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
+
+  // Constants
+  static const String baseUrl = 'http://10.0.2.2:5000';
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
 
-    // Auto-login to LMS immediately
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLoginToLMS();
     });
+    _checkBiometricStatus();
   }
 
   @override
@@ -39,19 +57,58 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  // US-03: Navigate to Edit Profile
+  // US-03: Navigate to Edit Profile
+  Future<void> _navigateToEditProfile() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(
+          user: widget.user,
+          onProfileUpdated: (updatedUser) {
+            // COMPLETELY REPLACE the user object with the updated one
+            setState(() {
+              widget.user['name'] = updatedUser['name'];
+              widget.user['email'] = updatedUser['email'];
+              widget.user['lmsUsername'] = updatedUser['lmsUsername'];
+              if (updatedUser['profilePicture'] != null) {
+                widget.user['profilePicture'] = updatedUser['profilePicture'];
+              }
+            });
+
+            // Also update stored user data
+            _updateStoredUser(widget.user);
+
+            // Show a snackbar confirming the update
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Profile updated successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _loadCourses();
+    }
+  }
+
+  // US-03: Update stored user data (ONLY ONE METHOD - remove the duplicate)
+  Future<void> _updateStoredUser(Map<String, dynamic> updatedUser) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_data', jsonEncode(updatedUser));
+  }
+
+  // Auto-login to LMS
   Future<void> _autoLoginToLMS() async {
     setState(() {
       _lmsLoading = true;
       _lmsErrorMessage = null;
     });
-
-    // Show a snackbar that auto-login is in progress
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Connecting to LMS...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
 
     print('🔄 Attempting auto-login...');
     bool success = await _lmsService.autoLoginLMS();
@@ -66,8 +123,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _loadCourses();
     } else {
       print('⚠️ Auto-login failed - no valid session');
-
-      // Try one more time with a small delay (maybe session wasn't ready)
       await Future.delayed(const Duration(seconds: 1));
       print('🔄 Retrying auto-login...');
       bool retrySuccess = await _lmsService.autoLoginLMS();
@@ -84,7 +139,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         setState(() {
           _isLMSLoggedIn = false;
           _lmsLoading = false;
-          _lmsErrorMessage = 'Unable to connect to LMS automatically. Please login manually.';
         });
       }
     }
@@ -98,8 +152,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
     List<LmsCourse> courses = await _lmsService.getCourses();
 
+    CourseStats stats = await _lmsService.getAllCoursesStats(courses);
+
     setState(() {
       _courses = courses;
+      _stats = stats;
       _lmsLoading = false;
     });
 
@@ -165,7 +222,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // Option to logout from app
               _showLogoutConfirmation();
             },
             child: const Text('Logout from App'),
@@ -189,8 +245,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
               });
 
               bool success = await _lmsService.loginToLMS(
-                  widget.user['lmsUsername'],
-                  lmsPassword
+                widget.user['lmsUsername'],
+                lmsPassword,
               );
 
               if (success) {
@@ -204,7 +260,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   _lmsLoading = false;
                   _lmsErrorMessage = 'Login failed. Please try again.';
                 });
-                _showErrorDialog('Login Failed', 'Invalid LMS credentials. Please try again.');
+                _showErrorDialog(
+                  'Login Failed',
+                  'Invalid LMS credentials. Please try again.',
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -264,6 +323,54 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     );
   }
 
+  Future<void> _checkBiometricStatus() async {
+    final available = await _biometricService.isBiometricAvailable();
+    final enabled = await _biometricService.isBiometricEnabledForUser(
+      widget.user['email'],
+    );
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled = enabled;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      final enabled = await _biometricService.enableBiometric(
+        widget.user['email'],
+      );
+      if (enabled && mounted) {
+        setState(() => _biometricEnabled = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric login enabled!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to enable biometric login'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
+      final disabled = await _biometricService.disableBiometric(
+        widget.user['email'],
+      );
+      if (disabled && mounted) {
+        setState(() => _biometricEnabled = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric login disabled'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -271,6 +378,19 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         title: const Text('MoodlePlus Home'),
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
+        actions: [
+          // US-03: Edit Profile button
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: _navigateToEditProfile,
+            tooltip: 'Edit Profile',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _showLogoutConfirmation,
+            tooltip: 'Logout',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
@@ -281,22 +401,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _showLogoutConfirmation,
-            tooltip: 'Logout',
-          ),
-        ],
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          // Profile Tab
-          _buildProfileTab(),
-          // Courses Tab
-          _buildCoursesTab(),
-        ],
+        children: [_buildProfileTab(), _buildCoursesTab()],
       ),
     );
   }
@@ -307,7 +415,6 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // Profile Header
           Stack(
             alignment: Alignment.center,
             children: [
@@ -361,18 +468,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ],
           ),
           const SizedBox(height: 24),
-
-          // User Name
           Text(
             widget.user['name'],
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-
-          // User Email
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
@@ -381,15 +481,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
             child: Text(
               widget.user['email'],
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
             ),
           ),
           const SizedBox(height: 32),
-
-          // Account Information Card
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -402,10 +497,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 children: [
                   const Text(
                     'Account Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
@@ -432,13 +524,110 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     value: _isLMSLoggedIn ? 'Connected' : 'Disconnected',
                     valueColor: _isLMSLoggedIn ? Colors.green : Colors.orange,
                   ),
+                  if (_biometricAvailable) ...[
+                    const Divider(height: 24),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.fingerprint,
+                            size: 20,
+                            color: Color(0xFF9D2BD1),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Biometric Login',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                'Use fingerprint or face ID to login',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _biometricEnabled,
+                          onChanged: _toggleBiometric,
+                          activeColor: const Color(0xFF9D2BD1),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
+          const Divider(height: 24),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.lock_outline,
+                  size: 20,
+                  color: Color(0xFF9D2BD1),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'LMS Password',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      'Change your uphslms.com password',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChangeLMSPasswordPage(
+                        lmsService: _lmsService,
+                        email: widget.user['email'],
+                      ),
+                    ),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF9D2BD1),
+                ),
+                child: const Text('Change'),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
-
-          // Stats Card
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -451,10 +640,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 children: [
                   const Text(
                     'Course Statistics',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -466,11 +652,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         label: 'Courses',
                         color: const Color(0xFF9D2BD1),
                       ),
-                      Container(
-                        height: 40,
-                        width: 1,
-                        color: Colors.grey[300],
-                      ),
+                      Container(height: 40, width: 1, color: Colors.grey[300]),
                       _buildStatItem(
                         icon: Icons.assignment,
                         value: _courses.isEmpty ? '0' : 'Available',
@@ -511,10 +693,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
               const SizedBox(height: 2),
               Text(
@@ -551,18 +730,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         const SizedBox(height: 8),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       ],
     );
   }
@@ -578,7 +748,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ),
             const SizedBox(height: 16),
             Text(
-              _isLMSLoggedIn ? 'Loading your courses...' : 'Connecting to LMS...',
+              _isLMSLoggedIn
+                  ? 'Loading your courses...'
+                  : 'Connecting to LMS...',
               style: const TextStyle(fontSize: 16),
             ),
           ],
@@ -599,36 +771,23 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                   color: Colors.orange.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.school,
-                  size: 60,
-                  color: Colors.orange,
-                ),
+                child: const Icon(Icons.school, size: 60, color: Colors.orange),
               ),
               const SizedBox(height: 24),
               const Text(
                 'Not Connected to LMS',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
                 'Username: ${widget.user['lmsUsername']}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
               if (_lmsErrorMessage != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   _lmsErrorMessage!,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.red,
-                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.red),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -667,26 +826,16 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.folder_open,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.folder_open, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             const Text(
               'No Courses Found',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               'You are not enrolled in any courses yet',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -709,9 +858,20 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       color: const Color(0xFF9D2BD1),
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
-        itemCount: _courses.length,
+        itemCount: _courses.length + 1,
         itemBuilder: (context, index) {
-          final course = _courses[index];
+          if (index == 0) {
+            return _buildProgressWidget(
+              totalTasks: _stats.totalTasks,
+              completedTasks: _stats.completedTasks,
+              totalQuizzes: _stats.totalQuizzes,
+              completedQuizzes: _stats.completedQuizzes,
+              totalAssignments: _stats.totalAssignments,
+              completedAssignments: _stats.completedAssignments,
+            );
+          }
+
+          final course = _courses[index - 1];
           return _buildCourseCard(course);
         },
       ),
@@ -722,9 +882,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -777,11 +935,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(
-                          Icons.folder,
-                          size: 14,
-                          color: Colors.grey[500],
-                        ),
+                        Icon(Icons.folder, size: 14, color: Colors.grey[500]),
                         const SizedBox(width: 4),
                         Text(
                           'Tap to view contents',
@@ -810,6 +964,136 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // US-07: Progress Tracker
+  Widget _buildProgressWidget({
+    required int totalTasks,
+    required int completedTasks,
+    required int totalQuizzes,
+    required int completedQuizzes,
+    required int totalAssignments,
+    required int completedAssignments,
+  }) {
+    int total = totalTasks + totalQuizzes + totalAssignments;
+    int completed = completedTasks + completedQuizzes + completedAssignments;
+
+    double percent = total == 0 ? 0 : completed / total;
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 70,
+            height: 50,
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: Text(
+                "${(percent * 100).toInt()}%",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildProgressRow(
+                  "New Tasks Today",
+                  totalTasks - completedTasks,
+                  Colors.red,
+                ),
+                _buildProgressRow(
+                  "Upcoming Quiz",
+                  totalQuizzes - completedQuizzes,
+                  Colors.orange,
+                ),
+                _buildProgressRow(
+                  "Assignments",
+                  totalAssignments - completedAssignments,
+                  Colors.purple,
+                ),
+                const SizedBox(height: 8),
+
+                // US-07: PROGRESS BAR
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      children: [
+                        Container(
+                          height: 10,
+                          color: const Color(0xFF9D2BD1),
+                        ),
+
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: percent,
+                          child: Container(
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red,
+                                  Colors.orange,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressRow(String title, int count, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            "$count ",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(title),
+        ],
       ),
     );
   }

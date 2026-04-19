@@ -9,6 +9,54 @@ class LMSService {
 
   LMSService({required this.userId});
 
+
+  Future<Map<String, dynamic>> changeLMSPasswordWithDetails(
+      String email,
+      String currentPassword,
+      String newPassword,
+      ) async {
+    try {
+      print('Changing LMS password for: $email');
+      print('Current password length: ${currentPassword.length}');
+      print('New password length: ${newPassword.length}');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/lms/change-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': userId,
+          'email': email,
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      print('Change password response status: ${response.statusCode}');
+      print('Change password response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password changed',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to change password',
+        };
+      }
+    } catch (e) {
+      debugPrint('Change LMS password error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<bool> changeLMSPassword(String email, String currentPassword, String newPassword) async {
+    final result = await changeLMSPasswordWithDetails(email, currentPassword, newPassword);
+    return result['success'] == true;
+  }
+
   // Login to uphslms.com
   Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
     try {
@@ -104,6 +152,61 @@ class LMSService {
       debugPrint('Get course contents error: $e');
       return CourseContents(courseTitle: '', sections: []);
     }
+  }
+
+  // US-07: Getting the course stats from the contents of the student's Moodle, including completed tasks
+  Future<CourseStats> getCourseStatsFromContents(String courseUrl) async {
+    CourseStats stats = CourseStats();
+
+    try {
+      final contents = await getCourseContents(courseUrl);
+
+      for (var section in contents.sections) {
+        for (var activity in section.activities) {
+          final type = activity.type.toLowerCase();
+          final status = activity.completionStatus.toLowerCase();
+          final badge = (activity.badge ?? '').toLowerCase();
+
+          final isCompleted =
+              status.contains('complete') ||
+                  status.contains('done') ||
+                  status.contains('pass') ||
+                  status.contains('submitted') ||
+                  badge.contains('submitted');
+
+          if (type.contains('assign')) {
+            stats.totalAssignments++;
+            if (isCompleted) stats.completedAssignments++;
+          } else if (type.contains('quiz')) {
+            stats.totalQuizzes++;
+            if (isCompleted) stats.completedQuizzes++;
+          } else {
+            stats.totalTasks++;
+            if (isCompleted) stats.completedTasks++;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error parsing course stats: $e');
+    }
+
+    return stats;
+  }
+
+  // US-07: Aggregates all number of tasks
+  Future<CourseStats> getAllCoursesStats(List<LmsCourse> courses) async {
+    CourseStats totalStats = CourseStats();
+
+    for (var course in courses) {
+      try {
+        final stats = await getCourseStatsFromContents(course.link);
+        totalStats.merge(stats);
+      } catch (e) {
+        debugPrint('Error with course ${course.name}: $e');
+      }
+    }
+
+    return totalStats;
   }
 }
 
@@ -213,5 +316,33 @@ class CourseActivity {
       completionStatus: json['completionStatus'] ?? 'unknown',
       dates: List<String>.from(json['dates'] ?? []),
     );
+  }
+}
+
+// US-07: Initial course stats (Tasks, Assignments, Quizzes)
+class CourseStats {
+  int totalTasks;
+  int completedTasks;
+  int totalQuizzes;
+  int completedQuizzes;
+  int totalAssignments;
+  int completedAssignments;
+
+  CourseStats({
+    this.totalTasks = 0,
+    this.completedTasks = 0,
+    this.totalQuizzes = 0,
+    this.completedQuizzes = 0,
+    this.totalAssignments = 0,
+    this.completedAssignments = 0,
+  });
+
+  void merge(CourseStats other) {
+    totalTasks += other.totalTasks;
+    completedTasks += other.completedTasks;
+    totalQuizzes += other.totalQuizzes;
+    completedQuizzes += other.completedQuizzes;
+    totalAssignments += other.totalAssignments;
+    completedAssignments += other.completedAssignments;
   }
 }

@@ -33,9 +33,10 @@ const createLMSClient = (cookies = []) => {
   }));
 };
 
+
 // LMS Login
 const lmsLogin = async (req, res) => {
-  console.log('LMS login for:', req.headers['x-user-id']);
+  console.log('📥 LMS login for:', req.headers['x-user-id']);
   const { username, password } = req.body;
   const loginUrl = 'https://uphslms.com/login/index.php';
 
@@ -64,6 +65,7 @@ const lmsLogin = async (req, res) => {
     const dashboard = await client.get('https://uphslms.com/');
 
     if (!dashboard.data.includes('Log in')) {
+      // US-06-T-01: Cookie Retrieval
       // Get cookies from jar
       const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
       const cookieStrings = cookies.map(c => c.cookieString());
@@ -103,7 +105,7 @@ const lmsLogin = async (req, res) => {
 
 // Verify LMS Credentials (for signup)
 const verifyLMSCredentials = async (req, res) => {
-  console.log('Verifying LMS credentials');
+  console.log('🔍 Verifying LMS credentials');
   const { username, password } = req.body;
 
   try {
@@ -165,7 +167,7 @@ const autoLoginLMS = async (req, res) => {
     }
 
     // If no in-memory session, try to restore from database
-    console.log('Trying to restore session from database');
+    console.log('🔄 Trying to restore session from database');
     const user = await User.findOne({ email: req.body.userId });
     
     if (user && user.lmsCookies && user.lmsCookies.length > 0) {
@@ -202,6 +204,7 @@ const autoLoginLMS = async (req, res) => {
   }
 };
 
+
 // Get Courses
 const getCourses = async (req, res) => {
   try {
@@ -229,7 +232,7 @@ const getCourses = async (req, res) => {
       }
     });
 
-    console.log(`Found ${courses.length} courses`);
+    console.log(`📊 Found ${courses.length} courses`);
     res.json({ courses });
 
   } catch (error) {
@@ -250,7 +253,7 @@ const getCourseContents = async (req, res) => {
       ? req.body.courseUrl
       : `https://uphslms.com${req.body.courseUrl}`;
 
-    console.log('Fetching course contents from:', url);
+    console.log('📚 Fetching course contents from:', url);
     const client = createLMSClient(session.cookies);
     const response = await client.get(url);
 
@@ -260,7 +263,7 @@ const getCourseContents = async (req, res) => {
     // Get course title
     const courseTitle = $('h1').first().text().trim();
     console.log('📖 Course:', courseTitle);
-
+    // US-06-T-02: Data Scrape Script
     // Extract sections
     $('li.section.course-section.main').each((sectionIndex, section) => {
       const sectionElement = $(section);
@@ -359,7 +362,7 @@ const getCourseContents = async (req, res) => {
       }
     });
 
-    console.log(`📊 Found ${courseContents.length} sections with total ${courseContents.reduce((acc, section) => acc + section.activities.length, 0)} activities`);
+    console.log(`Found ${courseContents.length} sections with total ${courseContents.reduce((acc, section) => acc + section.activities.length, 0)} activities`);
 
     res.json({
       courseTitle,
@@ -372,21 +375,146 @@ const getCourseContents = async (req, res) => {
   }
 };
 
+
 // Cleanup old sessions (run every hour)
 setInterval(() => {
   const oneHour = 3600000;
   for (const [id, session] of userSessions.entries()) {
     if (Date.now() - session.timestamp > oneHour) {
       userSessions.delete(id);
-      console.log('🧹 Removed expired session for user:', id);
+      console.log('Removed expired session for user:', id);
     }
   }
 }, 3600000);
 
+const changeLMSPassword = async (req, res) => {
+  console.log('Changing LMS password for user:', req.body.userId);
+  const { userId, currentPassword, newPassword } = req.body;
+
+  try {
+    const User = require('../models/User');
+    const user = await User.findOne({ email: userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const client = createLMSClient();
+    const loginUrl = 'https://uphslms.com/login/index.php';
+    
+    console.log('Step 1: Logging in...');
+    
+    const loginPage = await client.get(loginUrl);
+    let $ = cheerio.load(loginPage.data);
+    let logintoken = $('input[name="logintoken"]').val();
+    
+    await client.post(loginUrl,
+      new URLSearchParams({
+        username: user.lmsUsername,
+        password: currentPassword,
+        logintoken: logintoken,
+        anchor: ''
+      }), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+    
+    // Verify login
+    const dashboard = await client.get('https://uphslms.com/my/');
+    if (dashboard.data.includes('Log in')) {
+      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    }
+    
+    console.log('Login verified');
+    
+    // Get change password page
+    const changePasswordUrl = 'https://uphslms.com/login/change_password.php';
+    const changePasswordPage = await client.get(changePasswordUrl);
+    $ = cheerio.load(changePasswordPage.data);
+    
+    const sesskey = $('input[name="sesskey"]').val();
+    console.log('Sesskey:', sesskey);
+    
+    // Build form data
+    const formData = new URLSearchParams();
+    formData.append('id', '1');
+    formData.append('sesskey', sesskey);
+    formData.append('_qf__login_change_password_form', '1');
+    formData.append('password', currentPassword);
+    formData.append('newpassword1', newPassword);
+    formData.append('newpassword2', newPassword);
+    formData.append('logoutothersessions', '1');
+    formData.append('submitbutton', 'Save changes');
+    
+    console.log('Submitting...');
+    
+    const submitResponse = await client.post(changePasswordUrl, formData.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': changePasswordUrl
+      },
+      maxRedirects: 5
+    });
+    
+    const responseHtml = submitResponse.data;
+    
+    // DEBUG: Log the page title to see what we got
+    const $resp = cheerio.load(responseHtml);
+    const pageTitle = $resp('title').text();
+    console.log('Response page title:', pageTitle);
+    
+    // CHECK FOR SUCCESS - look for the success page title
+    if (pageTitle && pageTitle.includes('Password has been changed')) {
+      console.log('✅ Password changed successfully!');
+      
+      user.lmsPassword = newPassword;
+      await user.save();
+      
+      const { userSessions } = require('../utils/sessionStore');
+      userSessions.delete(userId);
+      
+      return res.json({ success: true, message: 'Password changed successfully' });
+    }
+    
+    // Also check for other success indicators
+    if (responseHtml.includes('Your password has been changed') || 
+        responseHtml.includes('password was updated')) {
+      console.log('✅ Password changed successfully!');
+      
+      user.lmsPassword = newPassword;
+      await user.save();
+      
+      const { userSessions } = require('../utils/sessionStore');
+      userSessions.delete(userId);
+      
+      return res.json({ success: true, message: 'Password changed successfully' });
+    }
+    
+    // Check for errors
+    const errorMessage = $resp('.alert-danger').first().text();
+    
+    if (errorMessage) {
+      console.log('❌ Error from Moodle:', errorMessage);
+      return res.status(400).json({ success: false, error: errorMessage });
+    }
+    
+    // If we got here, something unexpected happened
+    console.log('❌ Unexpected response - page title:', pageTitle);
+    console.log('Response snippet:', responseHtml.substring(0, 200));
+    res.status(400).json({ success: false, error: 'Failed to change password' });
+    
+  } catch (error) {
+    console.error('Error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
 module.exports = {
   lmsLogin,
   verifyLMSCredentials,
   autoLoginLMS,
   getCourses,
-  getCourseContents  // Replaced getCourseFiles with getCourseContents
+  getCourseContents,
+  changeLMSPassword
 };
