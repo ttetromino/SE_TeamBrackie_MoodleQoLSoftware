@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LMSService {
   static const String baseUrl = 'http://10.0.2.2:5000';
@@ -9,12 +10,53 @@ class LMSService {
 
   LMSService({required this.userId});
 
+  // Get courses from LMS (exclude archived)
+  Future<List<LmsCourse>> getCourses() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/lms/courses'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'userId': userId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Get archived course IDs to filter them out
+        final archivedIds = await _getArchivedCourseIds();
+
+        List<LmsCourse> courses = [];
+        for (var course in data['courses']) {
+          // US-04-T-02: Skip archived courses
+          if (!archivedIds.contains(course['id'].toString())) {
+            courses.add(LmsCourse.fromJson(course));
+          }
+        }
+        return courses;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Get courses error: $e');
+      return [];
+    }
+  }
+
+  // US-04-T-02: Get archived course IDs from local storage
+  Future<Set<String>> _getArchivedCourseIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final archivedJson = prefs.getString('archived_courses_$userId');
+    if (archivedJson != null) {
+      final List<dynamic> archived = jsonDecode(archivedJson);
+      return archived.map((c) => c['courseId'].toString()).toSet();
+    }
+    return {};
+  }
 
   Future<Map<String, dynamic>> changeLMSPasswordWithDetails(
-      String email,
-      String currentPassword,
-      String newPassword,
-      ) async {
+    String email,
+    String currentPassword,
+    String newPassword,
+  ) async {
     try {
       print('Changing LMS password for: $email');
       print('Current password length: ${currentPassword.length}');
@@ -52,25 +94,26 @@ class LMSService {
     }
   }
 
-  Future<bool> changeLMSPassword(String email, String currentPassword, String newPassword) async {
-    final result = await changeLMSPasswordWithDetails(email, currentPassword, newPassword);
+  Future<bool> changeLMSPassword(
+    String email,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final result = await changeLMSPasswordWithDetails(
+      email,
+      currentPassword,
+      newPassword,
+    );
     return result['success'] == true;
   }
 
-  // Login to uphslms.com
   Future<bool> loginToLMS(String lmsUsername, String lmsPassword) async {
     try {
       print('🔐 Attempting LMS login for: $lmsUsername');
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/login'),
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': userId,
-        },
-        body: jsonEncode({
-          'username': lmsUsername,
-          'password': lmsPassword,
-        }),
+        headers: {'Content-Type': 'application/json', 'x-user-id': userId},
+        body: jsonEncode({'username': lmsUsername, 'password': lmsPassword}),
       );
 
       print('📥 LMS login response: ${response.statusCode}');
@@ -85,7 +128,6 @@ class LMSService {
     }
   }
 
-  // Auto-login - check if session exists and is valid
   Future<bool> autoLoginLMS() async {
     try {
       print('Attempting auto-login for user: $userId');
@@ -107,40 +149,12 @@ class LMSService {
     }
   }
 
-  // Get courses from LMS
-  Future<List<LmsCourse>> getCourses() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/lms/courses'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'userId': userId}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        List<LmsCourse> courses = [];
-        for (var course in data['courses']) {
-          courses.add(LmsCourse.fromJson(course));
-        }
-        return courses;
-      }
-      return [];
-    } catch (e) {
-      debugPrint('Get courses error: $e');
-      return [];
-    }
-  }
-
-  // Get course contents (sections and activities)
   Future<CourseContents> getCourseContents(String courseUrl) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/course-contents'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'userId': userId,
-          'courseUrl': courseUrl,
-        }),
+        body: jsonEncode({'userId': userId, 'courseUrl': courseUrl}),
       );
 
       if (response.statusCode == 200) {
@@ -169,10 +183,10 @@ class LMSService {
 
           final isCompleted =
               status.contains('complete') ||
-                  status.contains('done') ||
-                  status.contains('pass') ||
-                  status.contains('submitted') ||
-                  badge.contains('submitted');
+              status.contains('done') ||
+              status.contains('pass') ||
+              status.contains('submitted') ||
+              badge.contains('submitted');
 
           if (type.contains('assign')) {
             stats.totalAssignments++;
@@ -238,10 +252,7 @@ class CourseContents {
   final String courseTitle;
   final List<CourseSection> sections;
 
-  CourseContents({
-    required this.courseTitle,
-    required this.sections,
-  });
+  CourseContents({required this.courseTitle, required this.sections});
 
   factory CourseContents.fromJson(Map<String, dynamic> json) {
     return CourseContents(

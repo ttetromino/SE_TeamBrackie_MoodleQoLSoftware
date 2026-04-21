@@ -5,10 +5,7 @@ import 'services/archive_service.dart';
 class ArchivedCourseDetailPage extends StatelessWidget {
   final ArchivedCourse course;
 
-  const ArchivedCourseDetailPage({
-    super.key,
-    required this.course,
-  });
+  const ArchivedCourseDetailPage({super.key, required this.course});
 
   @override
   Widget build(BuildContext context) {
@@ -65,18 +62,12 @@ class ArchivedCourseDetailPage extends StatelessWidget {
             const SizedBox(height: 24),
             const Text(
               'No Content Available',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               'This archived course has no saved content',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -125,21 +116,13 @@ class ArchivedCourseDetailPage extends StatelessWidget {
                 label: 'Archived',
                 value: _formatDate(course.archivedAt),
               ),
-              Container(
-                height: 30,
-                width: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 30, width: 1, color: Colors.grey[300]),
               _buildStatItem(
                 icon: Icons.assignment,
                 label: 'Activities',
                 value: '${course.totalActivities}',
               ),
-              Container(
-                height: 30,
-                width: 1,
-                color: Colors.grey[300],
-              ),
+              Container(height: 30, width: 1, color: Colors.grey[300]),
               _buildStatItem(
                 icon: Icons.check_circle,
                 label: 'Completed',
@@ -175,32 +158,23 @@ class ArchivedCourseDetailPage extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
       ],
     );
   }
 
   Widget _buildSectionCard(BuildContext context, Map<String, dynamic> section) {
-    final activities = List<Map<String, dynamic>>.from(section['activities'] ?? []);
+    final activities = List<Map<String, dynamic>>.from(
+      section['activities'] ?? [],
+    );
     if (activities.isEmpty) return const SizedBox.shrink();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -262,31 +236,48 @@ class ArchivedCourseDetailPage extends StatelessWidget {
       ),
       trailing: activity['completionStatus'] == 'done'
           ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
-          : const Icon(Icons.radio_button_unchecked, color: Colors.grey, size: 20),
+          : const Icon(
+              Icons.radio_button_unchecked,
+              color: Colors.grey,
+              size: 20,
+            ),
       onTap: null, // No tap action in reference mode
     );
   }
 
   IconData _getActivityIcon(String type) {
     switch (type) {
-      case 'forum': return Icons.forum;
-      case 'assign': return Icons.assignment;
-      case 'resource': return Icons.insert_drive_file;
-      case 'quiz': return Icons.quiz;
-      case 'url': return Icons.link;
-      case 'page': return Icons.web;
-      default: return Icons.help_outline;
+      case 'forum':
+        return Icons.forum;
+      case 'assign':
+        return Icons.assignment;
+      case 'resource':
+        return Icons.insert_drive_file;
+      case 'quiz':
+        return Icons.quiz;
+      case 'url':
+        return Icons.link;
+      case 'page':
+        return Icons.web;
+      default:
+        return Icons.help_outline;
     }
   }
 
   Color _getActivityColor(String type) {
     switch (type) {
-      case 'forum': return Colors.blue;
-      case 'assign': return Colors.green;
-      case 'resource': return Colors.purple;
-      case 'quiz': return Colors.amber;
-      case 'url': return Colors.teal;
-      default: return Colors.grey;
+      case 'forum':
+        return Colors.blue;
+      case 'assign':
+        return Colors.green;
+      case 'resource':
+        return Colors.purple;
+      case 'quiz':
+        return Colors.amber;
+      case 'url':
+        return Colors.teal;
+      default:
+        return Colors.grey;
     }
   }
 

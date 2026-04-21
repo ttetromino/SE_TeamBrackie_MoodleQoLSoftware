@@ -62,7 +62,10 @@ class ArchiveService {
   }
 
   // US-04-T-04: Get single archived course details
-  Future<ArchivedCourse?> getArchivedCourseDetails(String email, String courseId) async {
+  Future<ArchivedCourse?> getArchivedCourseDetails(
+    String email,
+    String courseId,
+  ) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/api/archive/course/$email/$courseId'),
@@ -85,10 +88,7 @@ class ArchiveService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/archive/restore'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'courseId': courseId,
-        }),
+        body: jsonEncode({'email': email, 'courseId': courseId}),
       );
 
       final data = jsonDecode(response.body);
@@ -105,10 +105,7 @@ class ArchiveService {
       final response = await http.delete(
         Uri.parse('$baseUrl/api/archive/course'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'courseId': courseId,
-        }),
+        body: jsonEncode({'email': email, 'courseId': courseId}),
       );
 
       final data = jsonDecode(response.body);
@@ -145,7 +142,9 @@ class ArchivedCourse {
       courseId: json['courseId'] ?? '',
       courseName: json['courseName'] ?? '',
       courseUrl: json['courseUrl'] ?? '',
-      archivedAt: DateTime.parse(json['archivedAt'] ?? DateTime.now().toIso8601String()),
+      archivedAt: DateTime.parse(
+        json['archivedAt'] ?? DateTime.now().toIso8601String(),
+      ),
       contents: json['contents'] ?? {},
       thumbnail: json['thumbnail'],
       metadata: json['metadata'] ?? {},
@@ -166,7 +165,6 @@ class ArchivedCourse {
 
   int get totalActivities => metadata['totalActivities'] ?? 0;
   int get completedActivities => metadata['completedActivities'] ?? 0;
-  double get completionPercentage => totalActivities > 0
-      ? (completedActivities / totalActivities) * 100
-      : 0;
+  double get completionPercentage =>
+      totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
 }

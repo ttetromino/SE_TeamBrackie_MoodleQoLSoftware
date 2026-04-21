@@ -208,18 +208,12 @@ class _ArchivedCoursesPageState extends State<ArchivedCoursesPage> {
             const SizedBox(height: 24),
             const Text(
               'No Archived Courses',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
               'Courses you archive will appear here',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -250,9 +244,7 @@ class _ArchivedCoursesPageState extends State<ArchivedCoursesPage> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -381,9 +373,8 @@ class _ArchivedCoursesPageState extends State<ArchivedCoursesPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ArchivedCourseDetailPage(
-                                course: course,
-                              ),
+                              builder: (context) =>
+                                  ArchivedCourseDetailPage(course: course),
                             ),
                           );
                         },
