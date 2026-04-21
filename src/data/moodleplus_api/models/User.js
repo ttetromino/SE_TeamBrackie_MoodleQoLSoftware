@@ -1,5 +1,21 @@
+// models/User.js (updated)
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+
+const archivedCourseSchema = new mongoose.Schema({
+  courseId: { type: String, required: true },
+  courseName: { type: String, required: true },
+  courseUrl: { type: String, required: true },
+  archivedAt: { type: Date, default: Date.now },
+  contents: { type: mongoose.Schema.Types.Mixed, default: {} }, // Store full course contents
+  thumbnail: { type: String, default: null },
+  metadata: {
+    originalEnrollmentDate: { type: Date, default: null },
+    lastAccessed: { type: Date, default: null },
+    totalActivities: { type: Number, default: 0 },
+    completedActivities: { type: Number, default: 0 }
+  }
+});
 
 const userSchema = new mongoose.Schema({
   name: { 
@@ -22,11 +38,6 @@ const userSchema = new mongoose.Schema({
   lmsPassword: { 
     type: String, 
     required: true 
-  },
-  // US-03: Add profile picture field
-  profilePicture: {
-    type: String,
-    default: null
   },
   // Session persistence fields
   lmsCookies: {
@@ -53,8 +64,13 @@ const userSchema = new mongoose.Schema({
   biometricEnabledAt: {
     type: Date,
     default: null
+  },
+  // US-04: Archived courses storage
+  archivedCourses: {
+    type: [archivedCourseSchema],
+    default: []
   }
-}, { timestamps: true });
+});
 
 // Only hash the main app password, NOT the LMS password
 userSchema.pre('save', async function() {
@@ -65,11 +81,6 @@ userSchema.pre('save', async function() {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
-  
-  // Remove LMS password hashing - store as plain text
-  // LMS password needs to be plain text to login to uphslms.com
-  
-  console.log('Pre-save hook completed');
 });
 
 // Method to compare main password
