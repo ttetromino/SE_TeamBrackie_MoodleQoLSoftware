@@ -8,6 +8,8 @@ import 'course_contents_page.dart';
 import 'services/biometric_service.dart';
 import 'change_lms_password_page.dart';
 import 'edit_profile_page.dart';
+import 'archived_courses_page.dart';
+import 'services/archive_service.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -22,6 +24,32 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late LMSService _lmsService;
+  late ArchiveService _archiveService;
+  List<ArchivedCourse> _archivedCourses = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this); // Changed to 3 tabs
+    _lmsService = LMSService(userId: widget.user['email']);
+    _archiveService = ArchiveService();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoLoginToLMS();
+      _loadArchivedCourses(); // Load archived courses count
+    });
+    _checkBiometricStatus();
+  }
+
+  // Load archived courses for count display
+  Future<void> _loadArchivedCourses() async {
+    final courses = await _archiveService.getArchivedCourses(
+      widget.user['email'],
+    );
+    setState(() {
+      _archivedCourses = courses;
+    });
+  }
 
   // LMS State
   bool _isLMSLoggedIn = false;
@@ -38,18 +66,6 @@ class _HomePageState extends State<HomePage>
 
   // Constants
   static const String baseUrl = 'http://10.0.2.2:5000';
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _lmsService = LMSService(userId: widget.user['email']);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _autoLoginToLMS();
-    });
-    _checkBiometricStatus();
-  }
 
   @override
   void dispose() {
@@ -379,7 +395,42 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // US-03: Edit Profile button
+          // Archive button
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.archive),
+                onPressed: () => _navigateToArchivedCourses(),
+                tooltip: 'Archived Records',
+              ),
+              if (_archivedCourses.isNotEmpty)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.orange,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '${_archivedCourses.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          // Edit Profile button
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _navigateToEditProfile,
@@ -399,14 +450,37 @@ class _HomePageState extends State<HomePage>
           tabs: const [
             Tab(text: 'Profile', icon: Icon(Icons.person)),
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
+            Tab(text: 'Archive', icon: Icon(Icons.archive)),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildProfileTab(), _buildCoursesTab()],
+        children: [
+          _buildProfileTab(),
+          _buildCoursesTab(),
+          ArchivedCoursesPage(
+            email: widget.user['email'],
+            lmsService: _lmsService,
+          ),
+        ],
       ),
     );
+  }
+
+  // Navigate to archived courses
+  Future<void> _navigateToArchivedCourses() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ArchivedCoursesPage(
+          email: widget.user['email'],
+          lmsService: _lmsService,
+        ),
+      ),
+    );
+    // Refresh archived count when coming back
+    _loadArchivedCourses();
   }
 
   Widget _buildProfileTab() {
@@ -949,6 +1023,12 @@ class _HomePageState extends State<HomePage>
                   ],
                 ),
               ),
+              // US-04-T-01: Archive button on course card
+              IconButton(
+                onPressed: () => _showArchiveConfirmation(course),
+                icon: const Icon(Icons.archive_outlined, color: Colors.orange),
+                tooltip: 'Archive Course',
+              ),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -966,6 +1046,105 @@ class _HomePageState extends State<HomePage>
         ),
       ),
     );
+  }
+
+  // US-04-T-01: Archive confirmation modal
+  Future<void> _showArchiveConfirmation(LmsCourse course) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.archive, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Archive Course'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to archive "${course.name}"?',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Archived courses can be viewed later in the Archive tab and will no longer appear in your active courses list.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'This action can be undone.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _lmsLoading = true);
+
+      final result = await _archiveService.archiveCourse(
+        email: widget.user['email'],
+        courseId: course.id,
+        courseName: course.name,
+        courseUrl: course.link,
+      );
+
+      setState(() => _lmsLoading = false);
+
+      if (result != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('"${course.name}" has been archived'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        // Refresh courses list
+        _loadCourses();
+        // Refresh archived count
+        _loadArchivedCourses();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to archive course'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // US-07: Progress Tracker
@@ -1048,10 +1227,7 @@ class _HomePageState extends State<HomePage>
                     borderRadius: BorderRadius.circular(8),
                     child: Stack(
                       children: [
-                        Container(
-                          height: 10,
-                          color: const Color(0xFF9D2BD1),
-                        ),
+                        Container(height: 10, color: const Color(0xFF9D2BD1)),
 
                         FractionallySizedBox(
                           alignment: Alignment.centerLeft,
@@ -1060,10 +1236,7 @@ class _HomePageState extends State<HomePage>
                             height: 10,
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [
-                                  Colors.red,
-                                  Colors.orange,
-                                ],
+                                colors: [Colors.red, Colors.orange],
                               ),
                             ),
                           ),
@@ -1071,7 +1244,7 @@ class _HomePageState extends State<HomePage>
                       ],
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -1087,10 +1260,7 @@ class _HomePageState extends State<HomePage>
         children: [
           Text(
             "$count ",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
           ),
           Text(title),
         ],
