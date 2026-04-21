@@ -1,3 +1,4 @@
+// server.js (updated routes section)
 const express = require('express');
 require('dotenv').config();
 
@@ -14,9 +15,8 @@ const {
   biometricLogin,
   getBiometricStatus,
   changeAppPassword,
-  updateEmail,         
-  updateProfilePicture, 
-  getProfile          
+  updateEmail,
+  updateProfilePicture
 } = require('./controllers/authController');
 
 const { 
@@ -27,6 +27,15 @@ const {
   changeLMSPassword 
 } = require('./controllers/lmsController');
 
+// US-04: Archive controllers
+const {
+  archiveCourse,
+  getArchivedCourses,
+  getArchivedCourseDetails,
+  restoreArchivedCourse,
+  deleteArchivedCourse
+} = require('./controllers/archiveController');
+
 const app = express();
 app.use(express.json());
 
@@ -35,11 +44,6 @@ connectDB();
 
 // Start session cleanup
 startSessionCleanup();
-
-// US-03: Edit Profile Feature
-app.get('/api/user/profile/:email', getProfile);
-app.put('/api/user/email', updateEmail);
-app.put('/api/user/profile-picture', updateProfilePicture);
 
 // Routes
 app.post('/users', signup);
@@ -52,12 +56,21 @@ app.post('/api/lms/course-contents', getCourseContents);
 app.put('/api/user/lms-credentials', updateLMSCredentials);
 app.post('/api/lms/change-password', changeLMSPassword);
 app.post('/api/user/change-password', changeAppPassword);
+app.put('/api/user/email', updateEmail);
+app.put('/api/user/profile-picture', updateProfilePicture);
 
 // Biometric routes
 app.post('/api/biometric/enable', enableBiometricLogin);
 app.post('/api/biometric/disable', disableBiometricLogin);
 app.post('/api/biometric/login', biometricLogin);
 app.get('/api/biometric/status/:email', getBiometricStatus);
+
+// US-04: Archive routes
+app.post('/api/archive/course', archiveCourse);
+app.get('/api/archive/courses/:email', getArchivedCourses);
+app.get('/api/archive/course/:email/:courseId', getArchivedCourseDetails);
+app.post('/api/archive/restore', restoreArchivedCourse);
+app.delete('/api/archive/course', deleteArchivedCourse);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
