@@ -36,6 +36,14 @@ const {
   deleteArchivedCourse
 } = require('./controllers/archiveController');
 
+const {
+  syncBacklog,
+  getBacklogItems,
+  togglePin,
+  completeItem,
+  saveLayoutPreference,
+  getLayoutPreference
+} = require('./controllers/backlogController');
 const app = express();
 app.use(express.json());
 
@@ -75,6 +83,13 @@ app.delete('/api/archive/course', deleteArchivedCourse);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// US-13: Backlog routes
+app.post('/api/backlog/sync', syncBacklog);
+app.get('/api/backlog/items/:email', getBacklogItems);
+app.put('/api/backlog/pin/:itemId', togglePin);
+app.put('/api/backlog/complete/:itemId', completeItem);
+app.post('/api/backlog/layout', saveLayoutPreference);
+app.get('/api/backlog/layout/:email', getLayoutPreference);
 // Test route
 app.get('/', (req, res) => {
   res.json({ message: 'Server is running' });

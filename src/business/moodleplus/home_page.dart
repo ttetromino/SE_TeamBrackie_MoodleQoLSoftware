@@ -10,6 +10,7 @@ import 'change_lms_password_page.dart';
 import 'edit_profile_page.dart';
 import 'archived_courses_page.dart';
 import 'services/archive_service.dart';
+import 'backlog_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -25,6 +26,7 @@ class _HomePageState extends State<HomePage>
   late TabController _tabController;
   late LMSService _lmsService;
   late ArchiveService _archiveService;
+
   List<ArchivedCourse> _archivedCourses = [];
 
   @override
@@ -450,6 +452,7 @@ class _HomePageState extends State<HomePage>
           tabs: const [
             Tab(text: 'Profile', icon: Icon(Icons.person)),
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
+            Tab(text: 'Backlog', icon: Icon(Icons.task)),
             Tab(text: 'Archive', icon: Icon(Icons.archive)),
           ],
         ),
@@ -459,6 +462,7 @@ class _HomePageState extends State<HomePage>
         children: [
           _buildProfileTab(),
           _buildCoursesTab(),
+          BacklogPage(email: widget.user['email']),
           ArchivedCoursesPage(
             email: widget.user['email'],
             lmsService: _lmsService,
