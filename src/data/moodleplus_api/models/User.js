@@ -69,6 +69,11 @@ const userSchema = new mongoose.Schema({
   archivedCourses: {
     type: [archivedCourseSchema],
     default: []
+  },
+  // US-13: User preferences
+  preferences: {
+    backlogLayout: { type: String, enum: ['compact', 'expanded'], default: 'compact' },
+    lastBacklogSync: { type: Date, default: null }
   }
 });
 
