@@ -258,7 +258,45 @@ void main() {
       }
     });
 
+    testWidgets('TC28 - Backlog: Timer Format (HH:MM)', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
 
+        // 2. Ensure we are in Expanded view (where the timer should be visible)
+        final expandedIcon = find.byIcon(Icons.view_agenda);
+        if (expandedIcon.evaluate().isEmpty) {
+          // If it's not expanded, tap the toggle button to make it expanded
+          await tester.tap(find.byIcon(Icons.view_module));
+          await tester.pumpAndSettle(const Duration(milliseconds: 500));
+        }
+
+        // 3. Verify at least one task card is present
+        expect(find.byType(CustomScrollView), findsOneWidget,
+            reason: "No tasks loaded to inspect.");
+
+        // 4. Use Regex to verify that at least one widget contains the HH:MM format
+        // This regex looks for: 2 digits, a colon, 2 digits (e.g., 02:30 or 12:45)
+        final RegExp timeFormatRegExp = RegExp(r'^\d{2}:\d{2}$');
+
+        // Find any Text widget on the screen that matches this exact pattern
+        final timerText = find.byWidgetPredicate((widget) {
+          if (widget is Text && widget.data != null) {
+            return timeFormatRegExp.hasMatch(widget.data!);
+          }
+          return false;
+        });
+
+        // 5. Assert that we found the properly formatted timer
+        expect(timerText, findsWidgets,
+            reason: "DEFECT: Timer format is incorrect. Could not find text matching HH:MM.");
+
+        debugPrint('TC28 - Backlog: Timer Format - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC28 - Backlog: Timer Format - FAILED ❌');
+        rethrow;
+      }
+    });
 
   });
 }
