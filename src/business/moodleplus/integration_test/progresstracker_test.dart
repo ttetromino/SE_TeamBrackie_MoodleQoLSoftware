@@ -82,6 +82,29 @@ void main() {
       }
     });
 
+    testWidgets('TC36 - Progress: Integer Display', (tester) async {
+      try {
+        await loginAndNavigateToMyCourses(tester);
+
+        // Find the text widget that contains the percentage sign
+        final percentageTextFinder = find.textContaining('%');
+        expect(percentageTextFinder, findsWidgets, reason: "No percentage text found on the tracker.");
+
+        // Grab the actual string (e.g., "33%")
+        final textWidget = tester.widget<Text>(percentageTextFinder.first);
+        final progressString = textWidget.data!;
+
+        // Verify it does NOT contain a decimal point
+        expect(progressString.contains('.'), isFalse,
+            reason: "DEFECT: Progress is displaying as a decimal ($progressString) instead of a rounded integer.");
+
+        debugPrint('TC36 - Progress: Integer Display - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC36 - Progress: Integer Display - FAILED ❌');
+        rethrow;
+      }
+    });
+
 
 
   });
