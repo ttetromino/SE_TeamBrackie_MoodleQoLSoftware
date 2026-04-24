@@ -81,7 +81,35 @@ void main() {
       }
     });
 
+    testWidgets('TC58 - Profile: Cancel Edit', (tester) async {
+      try {
+        await loginAndGoToProfile(tester);
+        await tester.tap(find.byIcon(Icons.edit));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
 
+        // Type something new
+        await tester.enterText(find.byType(TextField).at(0), 'canceled_email@gmail.com');
+
+        // Tap Back instead of Save
+        // Developers usually use a standard BackButton or an icon
+        final backBtn = find.byType(BackButton);
+        if (backBtn.evaluate().isNotEmpty) {
+          await tester.tap(backBtn);
+        } else {
+          await tester.tap(find.byIcon(Icons.arrow_back));
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Verify the email is still the old one on the Profile screen
+        expect(find.textContaining('canceled_email@gmail.com'), findsNothing,
+            reason: "DEFECT: Canceled edits were improperly saved to the UI.");
+
+        debugPrint('TC58 - Profile: Cancel Edit - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC58 - Profile: Cancel Edit - FAILED ❌');
+        rethrow;
+      }
+    });
 
     testWidgets('TC60 - Profile: Empty Field Validation', (tester) async {
       try {
