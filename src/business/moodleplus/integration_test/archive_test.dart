@@ -37,5 +37,28 @@ void main() {
       }
     });
 
+    testWidgets('TC63 - Archive: Modal Check', (tester) async {
+      try {
+        await loginToDashboard(tester);
+
+        // Tap the first archive icon
+        final archiveIcon = find.byIcon(Icons.archive);
+        expect(archiveIcon, findsWidgets, reason: "Setup: No courses to archive.");
+        await tester.tap(archiveIcon.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Verify Modal appears with Confirmation text
+        final confirmBtn = find.textContaining(RegExp(r'Confirm|Archive|Yes', caseSensitive: false));
+        expect(confirmBtn, findsOneWidget, reason: "TC63 FAILED: Confirmation modal did not appear.");
+
+        debugPrint('TC63 - Archive: Modal Check - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC63 - Archive: Modal Check - FAILED ❌');
+        rethrow;
+      }
+    });
+
+
+
   });
 }
