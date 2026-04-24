@@ -392,6 +392,7 @@ const changeLMSPassword = async (req, res) => {
   const { userId, currentPassword, newPassword } = req.body;
 
   try {
+    // Get user from database
     const User = require('../models/User');
     const user = await User.findOne({ email: userId });
     
@@ -399,15 +400,22 @@ const changeLMSPassword = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Create new client for fresh login
     const client = createLMSClient();
     const loginUrl = 'https://uphslms.com/login/index.php';
     
-    console.log('Step 1: Logging in...');
+    console.log('Step 1: Logging in with current credentials...');
     
+    // Get login page and extract token
     const loginPage = await client.get(loginUrl);
     let $ = cheerio.load(loginPage.data);
     let logintoken = $('input[name="logintoken"]').val();
     
+    if (!logintoken) {
+      return res.status(500).json({ error: 'Could not retrieve login token' });
+    }
+    
+    // Perform login
     await client.post(loginUrl,
       new URLSearchParams({
         username: user.lmsUsername,
@@ -415,97 +423,144 @@ const changeLMSPassword = async (req, res) => {
         logintoken: logintoken,
         anchor: ''
       }), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Referer': loginUrl
+        }
       });
     
-    // Verify login
+    // Verify login was successful
     const dashboard = await client.get('https://uphslms.com/my/');
     if (dashboard.data.includes('Log in')) {
       return res.status(401).json({ success: false, error: 'Current password is incorrect' });
     }
     
-    console.log('Login verified');
+    console.log('Step 2: Login successful, accessing change password page...');
     
-    // Get change password page
+    // Go to the change password page
     const changePasswordUrl = 'https://uphslms.com/login/change_password.php';
     const changePasswordPage = await client.get(changePasswordUrl);
     $ = cheerio.load(changePasswordPage.data);
     
+    // Extract the sesskey and other required fields
     const sesskey = $('input[name="sesskey"]').val();
-    console.log('Sesskey:', sesskey);
+    const userId_lms = $('input[name="id"]').val();
     
-    // Build form data
+    console.log('Step 3: Extracted sesskey:', sesskey);
+    console.log('User ID from form:', userId_lms);
+    
+    if (!sesskey) {
+      return res.status(500).json({ error: 'Could not retrieve session key' });
+    }
+    
+    // Submit the password change form
+    console.log('Step 4: Submitting password change...');
+    
     const formData = new URLSearchParams();
-    formData.append('id', '1');
+    formData.append('id', userId_lms || '1');
     formData.append('sesskey', sesskey);
-    formData.append('_qf__login_change_password_form', '1');
     formData.append('password', currentPassword);
     formData.append('newpassword1', newPassword);
     formData.append('newpassword2', newPassword);
     formData.append('logoutothersessions', '1');
     formData.append('submitbutton', 'Save changes');
     
-    console.log('Submitting...');
-    
     const submitResponse = await client.post(changePasswordUrl, formData.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Referer': changePasswordUrl
+        'Referer': changePasswordUrl,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
-      maxRedirects: 5
+      maxRedirects: 5,
+      // Don't follow redirects automatically to check response
+      validateStatus: (status) => status < 400
     });
     
     const responseHtml = submitResponse.data;
     
-    // DEBUG: Log the page title to see what we got
-    const $resp = cheerio.load(responseHtml);
-    const pageTitle = $resp('title').text();
-    console.log('Response page title:', pageTitle);
-    
-    // CHECK FOR SUCCESS - look for the success page title
-    if (pageTitle && pageTitle.includes('Password has been changed')) {
-      console.log('✅ Password changed successfully!');
-      
-      user.lmsPassword = newPassword;
-      await user.save();
-      
-      const { userSessions } = require('../utils/sessionStore');
-      userSessions.delete(userId);
-      
-      return res.json({ success: true, message: 'Password changed successfully' });
-    }
-    
-    // Also check for other success indicators
-    if (responseHtml.includes('Your password has been changed') || 
-        responseHtml.includes('password was updated')) {
-      console.log('✅ Password changed successfully!');
-      
-      user.lmsPassword = newPassword;
-      await user.save();
-      
-      const { userSessions } = require('../utils/sessionStore');
-      userSessions.delete(userId);
-      
-      return res.json({ success: true, message: 'Password changed successfully' });
-    }
+    // Check for success indicators
+    const hasSuccess = responseHtml.includes('Password changed') || 
+                      responseHtml.includes('Your password has been changed') ||
+                      responseHtml.includes('password was updated') ||
+                      (submitResponse.status === 302) || // Redirect on success
+                      responseHtml.includes('profile was updated');
     
     // Check for errors
-    const errorMessage = $resp('.alert-danger').first().text();
+    const hasError = responseHtml.includes('Invalid password') ||
+                    responseHtml.includes('Current password is incorrect') ||
+                    responseHtml.includes('error') && responseHtml.includes('password');
     
-    if (errorMessage) {
-      console.log('❌ Error from Moodle:', errorMessage);
-      return res.status(400).json({ success: false, error: errorMessage });
+    if (hasSuccess) {
+      console.log('✅ Password changed successfully!');
+      
+      // Update database with new plain text password
+      user.lmsPassword = newPassword;
+      await user.save();
+      
+      // Clear existing sessions
+      const { userSessions } = require('../utils/sessionStore');
+      userSessions.delete(userId);
+      
+      // Also try to login with new password to verify and get fresh session
+      try {
+        const newClient = createLMSClient();
+        const newLoginPage = await newClient.get(loginUrl);
+        const newLoginPage$ = cheerio.load(newLoginPage.data);
+        const newLogintoken = newLoginPage$('input[name="logintoken"]').val();
+        
+        await newClient.post(loginUrl,
+          new URLSearchParams({
+            username: user.lmsUsername,
+            password: newPassword,
+            logintoken: newLogintoken,
+            anchor: ''
+          }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+          });
+        
+        // Get new cookies
+        const cookies = await newClient.defaults.jar.getCookies('https://uphslms.com');
+        const cookieStrings = cookies.map(c => c.cookieString());
+        
+        // Store new session
+        userSessions.set(userId, {
+          cookies: cookieStrings,
+          timestamp: Date.now(),
+          username: user.lmsUsername
+        });
+        
+        // Update cookies in database
+        await User.findOneAndUpdate(
+          { email: userId },
+          { 
+            lmsCookies: cookieStrings,
+            lmsSessionExpiry: new Date(Date.now() + 60 * 60 * 1000)
+          }
+        );
+      } catch (loginError) {
+        console.log('New login verification failed:', loginError.message);
+      }
+      
+      res.json({ success: true, message: 'Password changed successfully' });
+      
+    } else if (hasError) {
+      console.log('❌ Password change failed - current password incorrect');
+      res.status(401).json({ success: false, error: 'Current password is incorrect' });
+      
+    } else {
+      console.log('❌ Password change failed - unknown error');
+      // Try to extract error message from page
+      const errorDiv = $('.alert-danger, .error, .alert').first().text();
+      const errorMsg = errorDiv || 'Failed to change password. Please try again.';
+      console.log('Error message from page:', errorMsg);
+      res.status(500).json({ success: false, error: errorMsg });
     }
     
-    // If we got here, something unexpected happened
-    console.log('❌ Unexpected response - page title:', pageTitle);
-    console.log('Response snippet:', responseHtml.substring(0, 200));
-    res.status(400).json({ success: false, error: 'Failed to change password' });
-    
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('Change password error:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
+      console.error('Response headers:', error.response.headers);
     }
     res.status(500).json({ error: error.message });
   }

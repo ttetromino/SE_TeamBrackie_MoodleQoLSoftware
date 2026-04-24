@@ -328,13 +328,9 @@ const getBiometricStatus = async (req, res) => {
   }
 };
 
-// US-03: Edit Profile Feature
-// Change App Password (for logging into the MoodlePlus app)
 const changeAppPassword = async (req, res) => {
   try {
     const { email, currentPassword, newPassword } = req.body;
-    
-    console.log('Change app password request for:', email);
     
     const user = await User.findOne({ email });
     if (!user) {
@@ -344,30 +340,22 @@ const changeAppPassword = async (req, res) => {
     // Verify current password
     const isValid = await user.comparePassword(currentPassword);
     if (!isValid) {
-      console.log('Current password is incorrect');
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
     
-    // Validate new password length
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    }
-    
-    // IMPORTANT: Set the plain text password - the pre-save hook will hash it
-    user.password = newPassword;
+    // Hash and save new password
+    const bcrypt = require('bcrypt');
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
     
-    console.log('App password changed successfully for:', email);
     res.json({ success: true, message: 'App password changed successfully' });
-    
   } catch (err) {
     console.error('Change app password error:', err);
     res.status(500).json({ error: err.message });
   }
 };
-// US-03: Edit Profile Feature
-// US-03-T-01: User Change Credentials
-// Update user email
+// US-03: Update email
 const updateEmail = async (req, res) => {
   try {
     const { email, newEmail, password } = req.body;
@@ -376,47 +364,34 @@ const updateEmail = async (req, res) => {
     
     const user = await User.findOne({ email });
     if (!user) {
-      console.log('User not found with email:', email);
       return res.status(404).json({ error: 'User not found' });
     }
     
-    console.log('Found user:', user.email);
-    
-    // Verify current password for authentication
+    // Verify current password
     const isValid = await user.comparePassword(password);
     if (!isValid) {
-      console.log('Password verification failed');
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
     
-    // Check if new email already exists (excluding current user)
+    // Check if new email already exists
     const existingUser = await User.findOne({ email: newEmail });
     if (existingUser && existingUser.email !== email) {
-      console.log('Email already in use:', newEmail);
       return res.status(400).json({ error: 'Email already in use' });
     }
     
-    // Validate email format
-    if (!newEmail.includes('@')) {
-      return res.status(400).json({ error: 'Please include an "@" in the email address.' });
-    }
-    
-    // Update the email
+    // Update email
     user.email = newEmail;
     await user.save();
     
-    console.log(`Email updated successfully: ${email} -> ${newEmail}`);
+    console.log('Email updated successfully for:', newEmail);
     
-    // Return the complete updated user
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Email updated successfully',
-      user: { 
-        name: user.name, 
-        email: user.email, 
-        lmsUsername: user.lmsUsername,
-        profilePicture: user.profilePicture,
-        biometricEnabled: user.biometricEnabled
+      user: {
+        name: user.name,
+        email: user.email,
+        lmsUsername: user.lmsUsername
       }
     });
   } catch (err) {
@@ -425,69 +400,32 @@ const updateEmail = async (req, res) => {
   }
 };
 
-// US-03: Edit Profile Feature
-// US-03-T-01: User Change Credentials
-// Update profile picture (base64 string)
+// US-03: Update profile picture
 const updateProfilePicture = async (req, res) => {
   try {
     const { email, profilePicture, password } = req.body;
+    
+    console.log('Update profile picture request for:', email);
     
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Verify current password for authentication
+    // Verify current password
     const isValid = await user.comparePassword(password);
     if (!isValid) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
     
-    // Validate profile picture size (limit to 2MB base64 string)
-    if (profilePicture && profilePicture.length > 2.5 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Profile picture is too large (max 2MB)' });
-    }
-    
-    user.profilePicture = profilePicture || null;
-    await user.save();
-    
-    console.log(`Profile picture updated for user: ${email}`);
-    res.json({ 
-      success: true, 
-      message: 'Profile picture updated successfully',
-      user: { name: user.name, email: user.email, lmsUsername: user.lmsUsername }
-    });
-  } catch (err) {
-    console.error('Update profile picture error:', err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// US-03: Edit Profile Feature
-// US-03-T-01: User Change Credentials
-// Get user profile data
-const getProfile = async (req, res) => {
-  try {
-    const { email } = req.params;
-    
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    console.log('Profile picture updated for:', email);
     
     res.json({
       success: true,
-      user: {
-        name: user.name,
-        email: user.email,
-        lmsUsername: user.lmsUsername,
-        profilePicture: user.profilePicture || null,
-        biometricEnabled: user.biometricEnabled,
-        createdAt: user.createdAt
-      }
+      message: 'Profile picture updated successfully'
     });
   } catch (err) {
-    console.error('Get profile error:', err);
+    console.error('Update profile picture error:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -501,7 +439,6 @@ module.exports = {
   biometricLogin,
   getBiometricStatus,
   changeAppPassword,
-  updateEmail,           
-  updateProfilePicture,  
-  getProfile
+  updateEmail,        
+  updateProfilePicture
 };
