@@ -132,5 +132,27 @@ void main() {
       }
     });
 
+    testWidgets('TC73 - Archive: Empty State', (tester) async {
+      try {
+        await loginToDashboard(tester);
+
+        // Navigate directly to Archive View
+        final archiveTab = find.textContaining(RegExp(r'Archive', caseSensitive: false));
+        await tester.tap(archiveTab.last);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // Look for empty state placeholder text
+        final emptyState = find.textContaining(RegExp(r'No.*Archived', caseSensitive: false));
+
+        expect(emptyState, findsOneWidget,
+            reason: "TC73 FAILED: Empty state text not found. The account likely has archived items in it already.");
+
+        debugPrint('TC73 - Archive: Empty State - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC73 - Archive: Empty State - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
