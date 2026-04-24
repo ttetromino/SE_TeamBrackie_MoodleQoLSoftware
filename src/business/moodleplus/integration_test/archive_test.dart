@@ -112,5 +112,25 @@ void main() {
       }
     });
 
+    testWidgets('TC67 - Archive: Legacy Label', (tester) async {
+      try {
+        await loginToDashboard(tester);
+
+        // Go to Archive Tab
+        final archiveTab = find.textContaining(RegExp(r'Archive', caseSensitive: false));
+        await tester.tap(archiveTab.last);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // Look for the visual legacy label on the items
+        final legacyLabel = find.textContaining(RegExp(r'Legacy|Archived', caseSensitive: false));
+        expect(legacyLabel, findsWidgets, reason: "TC67 FAILED: Archived items are missing the 'Legacy' visual tag.");
+
+        debugPrint('TC67 - Archive: Legacy Label - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC67 - Archive: Legacy Label - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
