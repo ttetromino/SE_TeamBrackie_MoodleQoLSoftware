@@ -340,7 +340,59 @@ void main() {
       }
     });
 
+    testWidgets('TC30 - Backlog: Expired Deadline (Edge Case)', (tester) async {
+      try {
+        await loginAndNavigateToBacklog(tester);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
 
+        // Search the screen for either "00:00" or the word "Overdue"
+        final overdueText = find.byWidgetPredicate((widget) {
+          if (widget is Text && widget.data != null) {
+            final text = widget.data!.toLowerCase();
+            return text.contains('00:00') || text.contains('overdue');
+          }
+          return false;
+        });
+
+        expect(overdueText, findsWidgets,
+            reason: "Could not find any tasks properly marked as 00:00 or Overdue");
+
+        debugPrint('TC30 - Backlog: Expired Deadline - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC30 - Backlog: Expired Deadline - FAILED ❌');
+        rethrow;
+      }
+    });
+
+    testWidgets('TC33 - Backlog: Empty List State (Edge Case)', (tester) async {
+      try {
+        await loginAndNavigateToBacklog(tester);
+
+        // 1. Open Filter Drawer
+        await tester.tap(find.text('Filter'));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 2. Select a highly restrictive filter (Assuming there is a "Completed" option)
+        // QA Note: Change 'Completed' to whatever filter guarantees 0 results
+        final filterOption = find.text('Completed');
+        if (filterOption.evaluate().isNotEmpty) {
+          await tester.tap(filterOption);
+        }
+
+        await tester.tap(find.text('Apply Filters'));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 3. Verify the "No tasks found" message appears
+        final emptyStateMessage = find.textContaining('No tasks found', caseSensitive: false);
+        expect(emptyStateMessage, findsOneWidget,
+            reason: "Empty state message did not appear when 0 tasks matched the filter");
+
+        debugPrint('TC33 - Backlog: Empty List State - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC33 - Backlog: Empty List State - FAILED ❌');
+        rethrow;
+      }
+    });
 
   });
 }
