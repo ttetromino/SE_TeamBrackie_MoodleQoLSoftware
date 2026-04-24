@@ -114,5 +114,82 @@ void main() {
       }
     });
 
+    testWidgets('TC24 - Backlog: View Persistence (LocalStorage)', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 2. The app defaults to compact. Let's switch it to Expanded.
+        final compactIcon = find.byIcon(Icons.view_module);
+        if (compactIcon.evaluate().isNotEmpty) {
+          await tester.tap(compactIcon);
+          await tester.pumpAndSettle(const Duration(milliseconds: 500));
+        }
+
+        // 3. Verify it is currently in Expanded mode (view_agenda)
+        expect(find.byIcon(Icons.view_agenda), findsOneWidget,
+            reason: "Failed to switch to expanded view before logout");
+
+        // ---------------------------------------------------------
+        // 4. LOG OUT FLOW
+        // Step 4a: Tap the button that opens the logout dialog
+        // (QA Note: Change Icons.logout to whatever icon/button actually opens your menu!)
+        await tester.tap(find.byIcon(Icons.logout));
+        await tester.pumpAndSettle();
+
+        // Step 4b: Tap the 'Logout' button inside the confirmation dialog you just showed me
+        await tester.tap(find.widgetWithText(ElevatedButton, 'Logout'));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+        // ---------------------------------------------------------
+
+        // 5. Log back in
+        await tester.enterText(find.byType(TextField).at(0), 'test@gmail.com');
+        await tester.enterText(find.byType(TextField).at(1), '123');
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.tap(find.widgetWithText(ElevatedButton, 'Log In'));
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // 6. Navigate back to the Backlog Page
+        await tester.tap(find.text('Backlog'));
+        await tester.pumpAndSettle();
+
+        // 7. Verify layout persisted! It should STILL be Expanded (view_agenda)
+        expect(find.byIcon(Icons.view_agenda), findsOneWidget,
+            reason: "Layout preference did not persist after logout");
+
+        debugPrint('TC24 - Backlog: View Persistence - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC24 - Backlog: View Persistence - FAILED ❌');
+        rethrow;
+      }
+    });
+
+    testWidgets('TC25 - Backlog: Compact Content (AC Verification)', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 2. Ensure we are starting in Compact view (Icon should be view_module)
+        expect(find.byIcon(Icons.view_module), findsOneWidget,
+            reason: "App did not default to compact view");
+
+        // 3. Ensure at least one task card is on the screen so we can inspect it
+        final hasList = find.byType(CustomScrollView).evaluate().isNotEmpty;
+        expect(hasList, isTrue, reason: "No tasks loaded to inspect.");
+
+        // 4. AC STRICT CHECK: The Timer icon should NOT exist in Compact view
+        // In Flutter tests, findsNothing is how we verify an element is successfully hidden
+        expect(find.byIcon(Icons.timer), findsNothing,
+            reason: "DEFECT: Timer icon is visible in Compact view, violating AC.");
+
+        debugPrint('TC25 - Backlog: Compact Content - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC25 - Backlog: Compact Content - FAILED ❌');
+        rethrow;
+      }
+    });
+
+
+
   });
 }
