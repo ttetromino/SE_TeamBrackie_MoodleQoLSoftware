@@ -58,7 +58,30 @@ void main() {
       }
     });
 
+    testWidgets('TC71 - Archive: Cancel Modal', (tester) async {
+      try {
+        await loginToDashboard(tester);
 
+        // Open the modal
+        await tester.tap(find.byIcon(Icons.archive).first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Tap Cancel
+        final cancelBtn = find.textContaining(RegExp(r'Cancel', caseSensitive: false));
+        expect(cancelBtn, findsOneWidget, reason: "Setup: Modal did not appear or missing Cancel button.");
+
+        await tester.tap(cancelBtn);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Verify the modal is gone
+        expect(cancelBtn, findsNothing, reason: "TC71 FAILED: Modal did not close after tapping Cancel.");
+
+        debugPrint('TC71 - Archive: Cancel Modal - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC71 - Archive: Cancel Modal - FAILED ❌');
+        rethrow;
+      }
+    });
 
   });
 }
