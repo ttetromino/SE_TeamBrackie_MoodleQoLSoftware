@@ -83,5 +83,36 @@ void main() {
       }
     });
 
+    testWidgets('TC23 - Backlog: Layout Toggle (Compact vs Expanded)', (tester) async {
+      try {
+        // We reuse the same helper function from TC22 to get to the Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 1. Verify the app starts in Compact mode (Icon should be view_module)
+        final viewToggleBtn = find.byIcon(Icons.view_module);
+        expect(viewToggleBtn, findsOneWidget, reason: "Initial layout should be compact");
+
+        // 2. First Click: Switch to Expanded view
+        await tester.tap(viewToggleBtn);
+        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+        // 3. Verify it changed to Expanded view (Icon should now be view_agenda)
+        final viewToggleBtnExpanded = find.byIcon(Icons.view_agenda);
+        expect(viewToggleBtnExpanded, findsOneWidget, reason: "Layout failed to switch to expanded");
+
+        // 4. Second Click: Switch back to Compact view
+        await tester.tap(viewToggleBtnExpanded);
+        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+        // 5. Verify it successfully returned to Compact view
+        expect(find.byIcon(Icons.view_module), findsOneWidget, reason: "Layout failed to return to compact");
+
+        debugPrint('TC23 - Backlog: Layout Toggle - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC23 - Backlog: Layout Toggle - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
