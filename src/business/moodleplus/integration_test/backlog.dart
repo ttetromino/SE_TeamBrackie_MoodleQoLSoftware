@@ -143,7 +143,7 @@ void main() {
         // ---------------------------------------------------------
 
         // 5. Log back in
-        await tester.enterText(find.byType(TextField).at(0), 'test@gmail.com');
+        await tester.enterText(find.byType(TextField).at(0), 'wilmartest1@gmail.com');
         await tester.enterText(find.byType(TextField).at(1), '123');
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.tap(find.widgetWithText(ElevatedButton, 'Log In'));
@@ -166,7 +166,7 @@ void main() {
 
     testWidgets('TC25 - Backlog: Compact Content (AC Verification)', (tester) async {
       try {
-        // 1. Initial login and navigate to Backlog
+        //  1. Initial login and navigate to Backlog
         await loginAndNavigateToBacklog(tester);
 
         // 2. Ensure we are starting in Compact view (Icon should be view_module)
@@ -185,6 +185,38 @@ void main() {
         debugPrint('TC25 - Backlog: Compact Content - PASSED ✅');
       } catch (e) {
         debugPrint('TC25 - Backlog: Compact Content - FAILED ❌');
+        rethrow;
+      }
+    });
+
+    testWidgets('TC26 - Backlog: Filter Drawer Accessibility', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 2. Find and tap the Filter button
+        // QA Note: If your filter button is an icon instead of text, change this to:
+        // final filterBtn = find.byIcon(Icons.filter_list);
+        final filterBtn = find.text('Filter');
+
+        expect(filterBtn, findsOneWidget, reason: "Filter button is missing from the screen");
+        await tester.tap(filterBtn);
+
+        // Wait for the drawer sliding animation to finish
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 3. Verify the Drawer opened by checking for standard Filter UI elements
+        // Looking for Radio buttons (used for single-select like "Sort By")
+        expect(find.byType(Radio<dynamic>), findsWidgets,
+            reason: "Drawer did not open or is missing Radio options");
+
+        // Looking for Checkboxes (used for multi-select like "Priority" or "Status")
+        expect(find.byType(Checkbox), findsWidgets,
+            reason: "Drawer did not open or is missing Multi-select checkbox options");
+
+        debugPrint('TC26 - Backlog: Filter Drawer Accessibility - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC26 - Backlog: Filter Drawer Accessibility - FAILED ❌');
         rethrow;
       }
     });
