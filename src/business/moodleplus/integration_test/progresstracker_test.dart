@@ -161,5 +161,40 @@ void main() {
       }
     });
 
+    testWidgets('TC45 - Progress: Negative Sync (Revert Task)', (tester) async {
+      try {
+        await loginAndNavigateToMyCourses(tester);
+
+        // Find a task and the percentage text
+        final taskCheckbox = find.byType(Checkbox).first;
+        final percentageFinder = find.textContaining('%');
+
+        // 1. Get initial percentage (e.g., "50%")
+        final initialPercentage = tester.widget<Text>(percentageFinder.first).data!;
+
+        // 2. Tap to Complete -> Wait -> Get new percentage
+        await tester.tap(taskCheckbox);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+        final completedPercentage = tester.widget<Text>(percentageFinder.first).data!;
+
+        // Verify it went up
+        expect(initialPercentage != completedPercentage, isTrue, reason: "Setup failed: Progress didn't change on click.");
+
+        // 3. Tap to REVERT -> Wait -> Get reverted percentage
+        await tester.tap(taskCheckbox);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+        final revertedPercentage = tester.widget<Text>(percentageFinder.first).data!;
+
+        // VERIFY: The reverted percentage must exactly match the initial percentage
+        expect(revertedPercentage, equals(initialPercentage),
+            reason: "DEFECT: Reverting the task did not return the progress to its original state.");
+
+        debugPrint('TC45 - Progress: Negative Sync - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC45 - Progress: Negative Sync - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
