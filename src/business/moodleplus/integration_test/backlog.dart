@@ -307,7 +307,7 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
         // 3. Find a task that is explicitly labeled "Urgent"
-        final urgentTaskText = find.textContaining('Urgent', caseSensitive: false);
+        final urgentTaskText = find.textContaining(RegExp('Urgent', caseSensitive: false));
 
         // If there are no urgent tasks in the test data, the test can't proceed
         expect(urgentTaskText, findsWidgets,
@@ -383,7 +383,7 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
         // 3. Verify the "No tasks found" message appears
-        final emptyStateMessage = find.textContaining('No tasks found', caseSensitive: false);
+        final emptyStateMessage = find.textContaining(RegExp('No tasks found', caseSensitive: false));
         expect(emptyStateMessage, findsOneWidget,
             reason: "Empty state message did not appear when 0 tasks matched the filter");
 
