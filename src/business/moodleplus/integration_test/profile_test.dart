@@ -1,0 +1,59 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import '../lib/main.dart' as app;
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Profile Integration Tests', () {
+
+    // ---------------------------------------------------------
+    // HELPER: Log In & Navigate to Profile Tab
+    // ---------------------------------------------------------
+    Future<void> loginAndGoToProfile(WidgetTester tester, {String email = 'wilmartest1@gmail.com', String pass = '123'}) async {
+      app.main();
+      await tester.pumpAndSettle();
+
+      final emailField = find.byType(TextField).at(0);
+      final passwordField = find.byType(TextField).at(1);
+
+      await tester.enterText(emailField, email);
+      await tester.enterText(passwordField, pass);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Log In'));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      final profileTab = find.text('Profile');
+      expect(profileTab, findsOneWidget, reason: "Could not find 'Profile' tab.");
+      await tester.tap(profileTab);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+    }
+
+    // ---------------------------------------------------------
+    // TC49 & TC50: Access & Field Presence
+    // ---------------------------------------------------------
+    testWidgets('TC49 & TC50 - Access Edit Page & Verify Fields', (tester) async {
+      try {
+        await loginAndGoToProfile(tester);
+
+        await tester.tap(find.byIcon(Icons.edit));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Check that at least 3 TextFields exist (Email, Password, Confirm)
+        expect(find.byType(TextField), findsAtLeastNWidgets(3),
+            reason: "Missing mandatory text fields on the Edit Profile page.");
+
+        expect(find.byType(CircleAvatar), findsWidgets,
+            reason: "Profile Picture UI element is missing.");
+
+        debugPrint('TC49 & TC50 - Edit Access & Fields - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC49 & TC50 - Edit Access & Fields - FAILED ❌');
+        rethrow;
+      }
+    });
+
+
+
+  });
+}
