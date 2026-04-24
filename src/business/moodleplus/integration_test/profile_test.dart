@@ -53,6 +53,36 @@ void main() {
       }
     });
 
+    testWidgets('TC53 - Profile: Password Mismatch', (tester) async {
+      try {
+        await loginAndGoToProfile(tester);
+        await tester.tap(find.byIcon(Icons.edit));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Note to QA: Adjust these indexes based on your app's actual layout!
+        // Assuming: 0=Email, 1=Old Pass, 2=New Pass, 3=Confirm Pass
+        final newPassField = find.byType(TextField).at(2);
+        final confirmPassField = find.byType(TextField).at(3);
+
+        await tester.enterText(newPassField, 'NewPass123');
+        await tester.enterText(confirmPassField, 'DifferentPass456');
+
+        await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+        // Ensure we are still on the edit page (error caught it)
+        expect(find.byType(TextField), findsWidgets,
+            reason: "DEFECT: System allowed mismatched passwords to be saved.");
+
+        debugPrint('TC53 - Profile: Password Mismatch - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC53 - Profile: Password Mismatch - FAILED ❌');
+        rethrow;
+      }
+    });
+
+
+
     testWidgets('TC60 - Profile: Empty Field Validation', (tester) async {
       try {
         await loginAndGoToProfile(tester);
