@@ -298,5 +298,49 @@ void main() {
       }
     });
 
+    testWidgets('TC29 - Backlog: Priority Styling (Urgent)', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 2. Wait for the list to load
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 3. Find a task that is explicitly labeled "Urgent"
+        final urgentTaskText = find.textContaining('Urgent', caseSensitive: false);
+
+        // If there are no urgent tasks in the test data, the test can't proceed
+        expect(urgentTaskText, findsWidgets,
+            reason: "Cannot verify styling: No 'Urgent' tasks loaded in the test data.");
+
+        // 4. Use a custom predicate to search the screen for Red or Orange styling
+        // We check Icons, Text, Cards, and Containers for those specific color properties
+        final urgentColorFound = find.byWidgetPredicate((widget) {
+          // Check if an Icon is red/orange
+          if (widget is Icon && (widget.color == Colors.red || widget.color == Colors.orange)) return true;
+          // Check if Text is red/orange
+          if (widget is Text && (widget.style?.color == Colors.red || widget.style?.color == Colors.orange)) return true;
+          // Check if a Container background or border is red/orange
+          if (widget is Container && widget.decoration is BoxDecoration) {
+            final boxDecoration = widget.decoration as BoxDecoration;
+            if (boxDecoration.color == Colors.red || boxDecoration.color == Colors.orange) return true;
+            if (boxDecoration.border?.top.color == Colors.red) return true;
+          }
+          return false;
+        });
+
+        // 5. Assert that the styling exists
+        expect(urgentColorFound, findsWidgets,
+            reason: "DEFECT: 'Urgent' task found, but no Red or Orange styling indicator was detected.");
+
+        debugPrint('TC29 - Backlog: Priority Styling - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC29 - Backlog: Priority Styling - FAILED ❌');
+        rethrow;
+      }
+    });
+
+
+
   });
 }
