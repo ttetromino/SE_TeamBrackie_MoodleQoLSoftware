@@ -221,6 +221,43 @@ void main() {
       }
     });
 
+    testWidgets('TC27 - Backlog: Radio Filter (By Course)', (tester) async {
+      try {
+        // 1. Initial login and navigate to Backlog
+        await loginAndNavigateToBacklog(tester);
+
+        // 2. Open the Filter Drawer
+        await tester.tap(find.text('Filter'));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 3. Find and select the "By Course" radio option
+        final byCourseOption = find.text('By Course');
+        expect(byCourseOption, findsOneWidget,
+            reason: "'By Course' option is missing from the filter drawer");
+
+        await tester.tap(byCourseOption);
+        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+        // 4. Click Apply Filters
+        final applyBtn = find.text('Apply Filters');
+        expect(applyBtn, findsOneWidget, reason: "'Apply Filters' button is missing");
+        await tester.tap(applyBtn);
+
+        // Wait for the drawer to close and the list to re-render
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 5. Verify the screen actually rendered a list of items after filtering
+        // We check for CustomScrollView because that is what your developer used for the list
+        expect(find.byType(CustomScrollView), findsOneWidget,
+            reason: "Task list failed to render after applying the 'By Course' filter");
+
+        debugPrint('TC27 - Backlog: Radio Filter - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC27 - Backlog: Radio Filter - FAILED ❌');
+        rethrow;
+      }
+    });
+
 
 
   });
