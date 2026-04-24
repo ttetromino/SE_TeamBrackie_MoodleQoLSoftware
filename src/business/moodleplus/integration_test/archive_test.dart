@@ -83,5 +83,34 @@ void main() {
       }
     });
 
+    testWidgets('TC65 - Archive: Cache Exclusion', (tester) async {
+      try {
+        await loginToDashboard(tester);
+
+        final archiveIcons = find.byIcon(Icons.archive);
+        expect(archiveIcons, findsWidgets, reason: "Setup: No courses available to archive.");
+
+        // Count how many courses there are initially
+        final initialCount = archiveIcons.evaluate().length;
+
+        // Archive the first one
+        await tester.tap(archiveIcons.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        final confirmBtn = find.textContaining(RegExp(r'Confirm|Archive|Yes', caseSensitive: false));
+        await tester.tap(confirmBtn);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // Verify the count dropped by 1, meaning it was excluded from the active view
+        final newCount = find.byIcon(Icons.archive).evaluate().length;
+        expect(newCount, lessThan(initialCount), reason: "TC65 FAILED: Course remained in active view after archiving.");
+
+        debugPrint('TC65 - Archive: Cache Exclusion - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC65 - Archive: Cache Exclusion - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
