@@ -196,5 +196,43 @@ void main() {
       }
     });
 
+    testWidgets('TC46 - Progress: Category Split Matches Backlog', (tester) async {
+      try {
+        await loginAndNavigateToMyCourses(tester);
+
+        // 1. Grab the numbers displayed on the Tracker UI
+        // Assuming the UI says something like "2 Quizzes" or "3 Assignments"
+        final quizTextFinder = find.textContaining(RegExp(r'Quiz', caseSensitive: false));
+        final assignmentTextFinder = find.textContaining(RegExp(r'Assignment', caseSensitive: false));
+
+        String quizString = quizTextFinder.evaluate().isNotEmpty ? tester.widget<Text>(quizTextFinder.first).data! : "0";
+        String assignmentString = assignmentTextFinder.evaluate().isNotEmpty ? tester.widget<Text>(assignmentTextFinder.first).data! : "0";
+
+        // Extract just the numbers from those strings (e.g., "2 Quizzes" -> 2)
+        int trackerQuizCount = int.tryParse(quizString.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+        int trackerAssignmentCount = int.tryParse(assignmentString.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+
+        // 2. Go to Backlog to count the ACTUAL items
+        await tester.tap(find.text('Backlog'));
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // Count how many widgets have the word "Quiz" or "Assignment" attached to them
+        int actualQuizCount = find.textContaining(RegExp(r'Quiz', caseSensitive: false)).evaluate().length;
+        int actualAssignmentCount = find.textContaining(RegExp(r'Assignment', caseSensitive: false)).evaluate().length;
+
+        // 3. Verify the Tracker UI wasn't lying!
+        expect(trackerQuizCount == actualQuizCount, isTrue,
+            reason: "DEFECT: Tracker says $trackerQuizCount Quizzes, but Backlog has $actualQuizCount.");
+
+        expect(trackerAssignmentCount == actualAssignmentCount, isTrue,
+            reason: "DEFECT: Tracker says $trackerAssignmentCount Assignments, but Backlog has $actualAssignmentCount.");
+
+        debugPrint('TC46 - Progress: Category Split Matches - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC46 - Progress: Category Split Matches - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
