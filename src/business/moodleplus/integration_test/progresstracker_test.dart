@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-// Note: using package import is usually safer than relative '../lib/main.dart'
-import 'package:moodleplus/main.dart' as app;
+import '../lib/main.dart' as app;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Progress Tracker Integration Tests', () {
 
-    Future<void> login(WidgetTester tester) async {
+    // Helper to get us logged in and on the My Courses tab
+    Future<void> loginAndNavigateToMyCourses(WidgetTester tester) async {
       app.main();
       await tester.pumpAndSettle();
 
@@ -19,33 +19,55 @@ void main() {
       await tester.enterText(emailField, 'wilmartest1@gmail.com');
       await tester.enterText(passwordField, '123');
 
-      // Click the button using our robust widget finder
+      // Tap login and wait for the Dashboard/Home to load
       await tester.tap(find.widgetWithText(ElevatedButton, 'Log In'));
+      await tester.pumpAndSettle(const Duration(seconds: 2));
 
-      // Wait for login to process and navigate to Home
+      // Navigate to My Courses
+      final myCoursesTab = find.text('My Courses');
+      expect(myCoursesTab, findsOneWidget, reason: "Could not find 'My Courses' tab.");
+      await tester.tap(myCoursesTab);
       await tester.pumpAndSettle(const Duration(seconds: 2));
     }
 
     testWidgets('TC35 - Progress Tracker: Happy Path (Instant UI Sync)', (tester) async {
       try {
-        await login(tester);
+        await loginAndNavigateToMyCourses(tester);
 
+        // 1. Verify we aren't already at 100% before doing anything
         expect(find.text('100%'), findsNothing,
             reason: "Setup Error: Tracker is already at 100% before test started.");
 
-        final taskItem = find.byType(Checkbox).first;
-        expect(taskItem, findsOneWidget, reason: "No pending tasks found to complete.");
+        // 2. NEW STEP: Navigate to the Backlog to find the tasks
+        final backlogTab = find.text('Backlog');
+        expect(backlogTab, findsOneWidget, reason: "Could not find 'Backlog' tab to navigate to.");
+        await tester.tap(backlogTab);
 
-        await tester.tap(taskItem);
+        // Wait for backlog to load
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // 3. Complete the task in the Backlog
+        final taskCheckboxes = find.byType(Checkbox);
+        expect(taskCheckboxes, findsWidgets,
+            reason: "DEFECT/SETUP: No pending tasks (checkboxes) found in the Backlog.");
+
+        await tester.tap(taskCheckboxes.first);
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
-        expect(find.text('100%'), findsOneWidget,
-            reason: "DEFECT: Percentage did not sync to 100% after completion.");
+        // 4. NEW STEP: Navigate back to My Courses to check the Progress Tracker
+        await tester.tap(find.text('My Courses'));
+        await tester.pumpAndSettle(const Duration(seconds: 2));
 
+        // 5. Verify the updates on the Progress Tracker
+        expect(find.text('100%'), findsOneWidget,
+            reason: "DEFECT: Percentage did not sync to 100% after completing task in backlog.");
+
+        // Check that the counter reset to exactly 0
         final zeroCounter = find.textContaining(RegExp(r'\b0\b'));
         expect(zeroCounter, findsWidgets,
             reason: "DEFECT: The 'Quizzes Left' counter did not reset to 0.");
 
+        // Check that the visual bar is full (1.0)
         final progressBar = find.byType(LinearProgressIndicator);
         if (progressBar.evaluate().isNotEmpty) {
           final indicator = tester.widget<LinearProgressIndicator>(progressBar.first);
@@ -59,5 +81,8 @@ void main() {
         rethrow;
       }
     });
+
+
+
   });
 }
