@@ -105,7 +105,36 @@ void main() {
       }
     });
 
+    testWidgets('TC39 - Progress: Task Completion (Counter Update)', (tester) async {
+      try {
+        await loginAndNavigateToMyCourses(tester);
 
+        // Find a pending task checkbox
+        final pendingTask = find.byType(Checkbox).first;
+        expect(pendingTask, findsOneWidget, reason: "No pending tasks found to complete.");
+
+        // 1. Get the initial state (Before click)
+        // We look for the word "Quiz" or "Assignment" to find the counter
+        final counterFinder = find.textContaining(RegExp(r'(Quiz|Assignment)'));
+        final initialText = tester.widget<Text>(counterFinder.first).data!;
+
+        // 2. Click the task to complete it
+        await tester.tap(pendingTask);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // 3. Get the new state (After click)
+        final updatedText = tester.widget<Text>(counterFinder.first).data!;
+
+        // Verify the text actually changed
+        expect(initialText != updatedText, isTrue,
+            reason: "DEFECT: The counter string ($initialText) did not update after completing a task.");
+
+        debugPrint('TC39 - Progress: Task Completion - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC39 - Progress: Task Completion - FAILED ❌');
+        rethrow;
+      }
+    });
 
   });
 }
