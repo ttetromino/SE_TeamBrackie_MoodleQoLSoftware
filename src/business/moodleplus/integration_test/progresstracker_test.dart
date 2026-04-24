@@ -136,5 +136,30 @@ void main() {
       }
     });
 
+    testWidgets('TC42 - Progress: Zero State', (tester) async {
+      try {
+        // QA Note: For this to truly pass, you must log in with an account that has 0 progress.
+        await loginAndNavigateToMyCourses(tester);
+
+        // 1. Check for exactly "0%"
+        final zeroPercentText = find.text('0%');
+        expect(zeroPercentText, findsOneWidget,
+            reason: "DEFECT: Zero state percentage is not displaying as exactly '0%'.");
+
+        // 2. Check the Progress Bar value is exactly 0.0
+        final progressBar = find.byType(LinearProgressIndicator);
+        if (progressBar.evaluate().isNotEmpty) {
+          final indicator = tester.widget<LinearProgressIndicator>(progressBar.first);
+          expect(indicator.value, equals(0.0),
+              reason: "DEFECT: The Progress Bar still has color/width filled on a 0% state.");
+        }
+
+        debugPrint('TC42 - Progress: Zero State - PASSED ✅');
+      } catch (e) {
+        debugPrint('TC42 - Progress: Zero State - FAILED ❌');
+        rethrow;
+      }
+    });
+
   });
 }
