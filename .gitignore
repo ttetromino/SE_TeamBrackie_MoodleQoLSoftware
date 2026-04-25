@@ -1,0 +1,6 @@
+
+.env
+.dart_tool/
+build/
+.flutter-plugins-dependencies
+pubspec.lock

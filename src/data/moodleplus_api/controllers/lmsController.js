@@ -33,6 +33,7 @@ const createLMSClient = (cookies = []) => {
   }));
 };
 
+
 // LMS Login
 const lmsLogin = async (req, res) => {
   console.log('📥 LMS login for:', req.headers['x-user-id']);
@@ -202,6 +203,7 @@ const autoLoginLMS = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 // Get Courses
 const getCourses = async (req, res) => {
@@ -373,6 +375,7 @@ const getCourseContents = async (req, res) => {
   }
 };
 
+
 // Cleanup old sessions (run every hour)
 setInterval(() => {
   const oneHour = 3600000;
@@ -384,10 +387,189 @@ setInterval(() => {
   }
 }, 3600000);
 
+const changeLMSPassword = async (req, res) => {
+  console.log('Changing LMS password for user:', req.body.userId);
+  const { userId, currentPassword, newPassword } = req.body;
+
+  try {
+    // Get user from database
+    const User = require('../models/User');
+    const user = await User.findOne({ email: userId });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Create new client for fresh login
+    const client = createLMSClient();
+    const loginUrl = 'https://uphslms.com/login/index.php';
+    
+    console.log('Step 1: Logging in with current credentials...');
+    
+    // Get login page and extract token
+    const loginPage = await client.get(loginUrl);
+    let $ = cheerio.load(loginPage.data);
+    let logintoken = $('input[name="logintoken"]').val();
+    
+    if (!logintoken) {
+      return res.status(500).json({ error: 'Could not retrieve login token' });
+    }
+    
+    // Perform login
+    await client.post(loginUrl,
+      new URLSearchParams({
+        username: user.lmsUsername,
+        password: currentPassword,
+        logintoken: logintoken,
+        anchor: ''
+      }), {
+        headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Referer': loginUrl
+        }
+      });
+    
+    // Verify login was successful
+    const dashboard = await client.get('https://uphslms.com/my/');
+    if (dashboard.data.includes('Log in')) {
+      return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    }
+    
+    console.log('Step 2: Login successful, accessing change password page...');
+    
+    // Go to the change password page
+    const changePasswordUrl = 'https://uphslms.com/login/change_password.php';
+    const changePasswordPage = await client.get(changePasswordUrl);
+    $ = cheerio.load(changePasswordPage.data);
+    
+    // Extract the sesskey and other required fields
+    const sesskey = $('input[name="sesskey"]').val();
+    const userId_lms = $('input[name="id"]').val();
+    
+    console.log('Step 3: Extracted sesskey:', sesskey);
+    console.log('User ID from form:', userId_lms);
+    
+    if (!sesskey) {
+      return res.status(500).json({ error: 'Could not retrieve session key' });
+    }
+    
+    // Submit the password change form
+    console.log('Step 4: Submitting password change...');
+    
+    const formData = new URLSearchParams();
+    formData.append('id', userId_lms || '1');
+    formData.append('sesskey', sesskey);
+    formData.append('password', currentPassword);
+    formData.append('newpassword1', newPassword);
+    formData.append('newpassword2', newPassword);
+    formData.append('logoutothersessions', '1');
+    formData.append('submitbutton', 'Save changes');
+    
+    const submitResponse = await client.post(changePasswordUrl, formData.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': changePasswordUrl,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      maxRedirects: 5,
+      // Don't follow redirects automatically to check response
+      validateStatus: (status) => status < 400
+    });
+    
+    const responseHtml = submitResponse.data;
+    
+    // Check for success indicators
+    const hasSuccess = responseHtml.includes('Password changed') || 
+                      responseHtml.includes('Your password has been changed') ||
+                      responseHtml.includes('password was updated') ||
+                      (submitResponse.status === 302) || // Redirect on success
+                      responseHtml.includes('profile was updated');
+    
+    // Check for errors
+    const hasError = responseHtml.includes('Invalid password') ||
+                    responseHtml.includes('Current password is incorrect') ||
+                    responseHtml.includes('error') && responseHtml.includes('password');
+    
+    if (hasSuccess) {
+      console.log('✅ Password changed successfully!');
+      
+      // Update database with new plain text password
+      user.lmsPassword = newPassword;
+      await user.save();
+      
+      // Clear existing sessions
+      const { userSessions } = require('../utils/sessionStore');
+      userSessions.delete(userId);
+      
+      // Also try to login with new password to verify and get fresh session
+      try {
+        const newClient = createLMSClient();
+        const newLoginPage = await newClient.get(loginUrl);
+        const newLoginPage$ = cheerio.load(newLoginPage.data);
+        const newLogintoken = newLoginPage$('input[name="logintoken"]').val();
+        
+        await newClient.post(loginUrl,
+          new URLSearchParams({
+            username: user.lmsUsername,
+            password: newPassword,
+            logintoken: newLogintoken,
+            anchor: ''
+          }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+          });
+        
+        // Get new cookies
+        const cookies = await newClient.defaults.jar.getCookies('https://uphslms.com');
+        const cookieStrings = cookies.map(c => c.cookieString());
+        
+        // Store new session
+        userSessions.set(userId, {
+          cookies: cookieStrings,
+          timestamp: Date.now(),
+          username: user.lmsUsername
+        });
+        
+        // Update cookies in database
+        await User.findOneAndUpdate(
+          { email: userId },
+          { 
+            lmsCookies: cookieStrings,
+            lmsSessionExpiry: new Date(Date.now() + 60 * 60 * 1000)
+          }
+        );
+      } catch (loginError) {
+        console.log('New login verification failed:', loginError.message);
+      }
+      
+      res.json({ success: true, message: 'Password changed successfully' });
+      
+    } else if (hasError) {
+      console.log('❌ Password change failed - current password incorrect');
+      res.status(401).json({ success: false, error: 'Current password is incorrect' });
+      
+    } else {
+      console.log('❌ Password change failed - unknown error');
+      // Try to extract error message from page
+      const errorDiv = $('.alert-danger, .error, .alert').first().text();
+      const errorMsg = errorDiv || 'Failed to change password. Please try again.';
+      console.log('Error message from page:', errorMsg);
+      res.status(500).json({ success: false, error: errorMsg });
+    }
+    
+  } catch (error) {
+    console.error('Change password error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response headers:', error.response.headers);
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
 module.exports = {
   lmsLogin,
   verifyLMSCredentials,
   autoLoginLMS,
   getCourses,
-  getCourseContents  // Replaced getCourseFiles with getCourseContents
+  getCourseContents,
+  changeLMSPassword
 };
