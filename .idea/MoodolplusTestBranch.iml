@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/SE_TeamBrackie_MoodleQoLSoftware/src/business/moodleplus/.dart_tool" />
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/SE_TeamBrackie_MoodleQoLSoftware/src/business/moodleplus/.pub" />
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/SE_TeamBrackie_MoodleQoLSoftware/src/business/moodleplus/build" />
+      <excludeFolder url="file://$MODULE_DIR$/moodleplus/build" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="Dart SDK" level="project" />
+    <orderEntry type="library" name="Dart Packages" level="project" />
+  </component>
+</module>

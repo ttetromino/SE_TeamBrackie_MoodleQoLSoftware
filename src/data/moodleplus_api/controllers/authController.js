@@ -1,5 +1,8 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const { createLMSClient } = require('../utils/lmsClient');
+const { userSessions } = require('../utils/sessionStore');
 
 // Signup with required LMS credentials
 const signup = async (req, res) => {
@@ -58,6 +61,7 @@ const signup = async (req, res) => {
     });
   }
 };
+
 // US-01-T-05: Create Login
 // Login
 const login = async (req, res) => {
@@ -127,7 +131,6 @@ const updateLMSCredentials = async (req, res) => {
   }
 };
 
-
 // Auto Login LMS (check if session exists)
 const autoLoginLMS = async (req, res) => {
   console.log('Auto-login for user:', req.body.userId);
@@ -137,12 +140,14 @@ const autoLoginLMS = async (req, res) => {
     
     // First check in-memory session
     const session = userSessions.get(userId);
-    if (session) {
+    if (session && session.cookies) {
       console.log('Found in-memory session');
       // Check if session is still valid
       const client = createLMSClient(session.cookies);
       try {
-        const dashboard = await client.get('https://uphslms.com/');
+        const dashboard = await client.get('https://uphslms.com/my/', {
+          timeout: 10000
+        });
         if (!dashboard.data.includes('Log in')) {
           console.log('Existing in-memory session still valid');
           return res.json({ success: true });
@@ -174,14 +179,17 @@ const autoLoginLMS = async (req, res) => {
           // Try to use stored cookies
           const client = createLMSClient(user.lmsCookies);
           try {
-            const dashboard = await client.get('https://uphslms.com/');
+            const dashboard = await client.get('https://uphslms.com/my/', {
+              timeout: 10000
+            });
             if (!dashboard.data.includes('Log in')) {
               console.log('Restored session from database');
               
               // Restore to in-memory storage
               userSessions.set(userId, {
                 cookies: user.lmsCookies,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                username: user.lmsUsername
               });
               
               return res.json({ success: true });
@@ -210,4 +218,227 @@ const autoLoginLMS = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-module.exports = { signup, login, updateLMSCredentials, autoLoginLMS };
+
+// Enable biometric login for user
+const enableBiometricLogin = async (req, res) => {
+  try {
+    const { email, biometricToken } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Generate a unique token if not provided
+    const token = biometricToken || crypto.randomBytes(32).toString('hex');
+    
+    user.biometricEnabled = true;
+    user.biometricToken = token;
+    user.biometricEnabledAt = new Date();
+    
+    await user.save();
+    
+    console.log(`Biometric login enabled for user: ${email}`);
+    res.json({ 
+      success: true,
+      message: 'Biometric login enabled',
+      token: token
+    });
+  } catch (err) {
+    console.error('Enable biometric error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Disable biometric login for user
+const disableBiometricLogin = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.biometricEnabled = false;
+    user.biometricToken = null;
+    user.biometricEnabledAt = null;
+    
+    await user.save();
+    
+    console.log(`Biometric login disabled for user: ${email}`);
+    res.json({ 
+      success: true,
+      message: 'Biometric login disabled'
+    });
+  } catch (err) {
+    console.error('Disable biometric error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Biometric login
+const biometricLogin = async (req, res) => {
+  try {
+    const { email, biometricToken } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Check if biometric is enabled and token matches
+    if (!user.biometricEnabled || user.biometricToken !== biometricToken) {
+      return res.status(401).json({ error: 'Invalid biometric authentication' });
+    }
+    
+    console.log(`Biometric login successful for: ${email}`);
+    res.json({ 
+      success: true,
+      user: { 
+        name: user.name, 
+        email: user.email,
+        lmsUsername: user.lmsUsername,
+        biometricEnabled: user.biometricEnabled
+      }
+    });
+  } catch (err) {
+    console.error('Biometric login error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Get biometric status
+const getBiometricStatus = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      biometricEnabled: user.biometricEnabled,
+      enabledAt: user.biometricEnabledAt
+    });
+  } catch (err) {
+    console.error('Get biometric status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const changeAppPassword = async (req, res) => {
+  try {
+    const { email, currentPassword, newPassword } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValid = await user.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash and save new password
+    const bcrypt = require('bcrypt');
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+    
+    res.json({ success: true, message: 'App password changed successfully' });
+  } catch (err) {
+    console.error('Change app password error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+// US-03: Update email
+const updateEmail = async (req, res) => {
+  try {
+    const { email, newEmail, password } = req.body;
+    
+    console.log('Update email request:', { email, newEmail });
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValid = await user.comparePassword(password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Check if new email already exists
+    const existingUser = await User.findOne({ email: newEmail });
+    if (existingUser && existingUser.email !== email) {
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+    
+    // Update email
+    user.email = newEmail;
+    await user.save();
+    
+    console.log('Email updated successfully for:', newEmail);
+    
+    res.json({
+      success: true,
+      message: 'Email updated successfully',
+      user: {
+        name: user.name,
+        email: user.email,
+        lmsUsername: user.lmsUsername
+      }
+    });
+  } catch (err) {
+    console.error('Update email error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-03: Update profile picture
+const updateProfilePicture = async (req, res) => {
+  try {
+    const { email, profilePicture, password } = req.body;
+    
+    console.log('Update profile picture request for:', email);
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Verify current password
+    const isValid = await user.comparePassword(password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    console.log('Profile picture updated for:', email);
+    
+    res.json({
+      success: true,
+      message: 'Profile picture updated successfully'
+    });
+  } catch (err) {
+    console.error('Update profile picture error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+module.exports = { 
+  signup, 
+  login, 
+  updateLMSCredentials, 
+  autoLoginLMS,
+  enableBiometricLogin,
+  disableBiometricLogin,
+  biometricLogin,
+  getBiometricStatus,
+  changeAppPassword,
+  updateEmail,        
+  updateProfilePicture
+};
