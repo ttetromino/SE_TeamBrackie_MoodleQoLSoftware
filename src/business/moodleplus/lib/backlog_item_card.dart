@@ -67,7 +67,9 @@ class BacklogItemCard extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: item.urgencyColor,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      maxLines: 1,
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -99,6 +101,7 @@ class BacklogItemCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: item.urgencyColor,
                   ),
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -216,7 +219,6 @@ class BacklogItemCard extends StatelessWidget {
 
   // US-13-T-01: Compact Card Layout
   Widget _buildCompactCard(BuildContext context) {
-    // Add context parameter here
     return InkWell(
       onTap: () => _showQuickActions(context),
       borderRadius: BorderRadius.circular(12),
@@ -235,7 +237,7 @@ class BacklogItemCard extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // Checkbox for completion
+            // Checkbox for completion (Status indicator)
             Checkbox(
               value: false,
               onChanged: (_) => onComplete(),
@@ -245,7 +247,7 @@ class BacklogItemCard extends StatelessWidget {
 
             const SizedBox(width: 4),
 
-            // Activity type icon
+            // Activity type icon (optional but nice to have)
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
@@ -261,48 +263,20 @@ class BacklogItemCard extends StatelessWidget {
 
             const SizedBox(width: 12),
 
-            // Task info
+            // Task info - ONLY TITLE (NO Course Code, NO Timer)
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.activityName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Text(
-                        item.courseCode,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: item.urgencyColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.timer, size: 12, color: Colors.grey[500]),
-                      const SizedBox(width: 2),
-                      Text(
-                        item.formattedTimeRemaining,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: item.urgencyColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(
+                item.activityName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 2,  // Allow up to 2 lines for long titles
+                overflow: TextOverflow.ellipsis,
               ),
             ),
 
-            // Pin button
+            // Pin button (kept as it's a status indicator)
             IconButton(
               onPressed: onTogglePin,
               icon: Icon(

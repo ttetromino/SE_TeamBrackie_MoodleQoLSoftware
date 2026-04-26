@@ -32,13 +32,13 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Changed to 3 tabs
+    _tabController = TabController(length: 3, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
     _archiveService = ArchiveService();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLoginToLMS();
-      _loadArchivedCourses(); // Load archived courses count
+      _loadArchivedCourses();
     });
     _checkBiometricStatus();
   }
@@ -397,12 +397,12 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // Archive button
+          // Archive button in AppBar (WORKING)
           Stack(
             children: [
               IconButton(
                 icon: const Icon(Icons.archive),
-                onPressed: () => _navigateToArchivedCourses(),
+                onPressed: _navigateToArchivedCourses,
                 tooltip: 'Archived Records',
               ),
               if (_archivedCourses.isNotEmpty)
@@ -432,7 +432,6 @@ class _HomePageState extends State<HomePage>
                 ),
             ],
           ),
-          // Edit Profile button
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: _navigateToEditProfile,
@@ -453,7 +452,7 @@ class _HomePageState extends State<HomePage>
             Tab(text: 'Profile', icon: Icon(Icons.person)),
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
             Tab(text: 'Backlog', icon: Icon(Icons.task)),
-            Tab(text: 'Archive', icon: Icon(Icons.archive)),
+            // NO Archive tab here - it's in AppBar
           ],
         ),
       ),
@@ -463,10 +462,7 @@ class _HomePageState extends State<HomePage>
           _buildProfileTab(),
           _buildCoursesTab(),
           BacklogPage(email: widget.user['email']),
-          ArchivedCoursesPage(
-            email: widget.user['email'],
-            lmsService: _lmsService,
-          ),
+          // NO Archive page here
         ],
       ),
     );
