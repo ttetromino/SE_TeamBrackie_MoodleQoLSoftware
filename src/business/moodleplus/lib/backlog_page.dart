@@ -202,6 +202,7 @@ class _BacklogPageState extends State<BacklogPage> {
           // Layout toggle button
           IconButton(
             icon: Icon(
+              key: const Key('toggle_layout_button'),
               _layoutMode == 'compact' ? Icons.view_module : Icons.view_agenda,
             ),
             onPressed: _toggleLayout,
@@ -230,6 +231,7 @@ class _BacklogPageState extends State<BacklogPage> {
           ),
           // Filter button
           IconButton(
+            key: const Key('filter_button'),
             icon: Badge(
               isLabelVisible:
                   _currentFilterBy != 'none' ||
@@ -297,12 +299,12 @@ class _BacklogPageState extends State<BacklogPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'No Tasks',
+              'No Tasks Found',  // TC33: Clear message
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'All caught up! No pending tasks.',
+              'Try changing your filters or sync with LMS',
               style: TextStyle(fontSize: 14, color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
@@ -314,6 +316,17 @@ class _BacklogPageState extends State<BacklogPage> {
                 backgroundColor: const Color(0xFF9D2BD1),
                 foregroundColor: Colors.white,
               ),
+            ),
+            TextButton(
+              onPressed: () {
+                _applyFilters(
+                  filterBy: 'none',
+                  priority: 'all',
+                  courseCode: 'all',
+                  showPinnedOnly: false,
+                );
+              },
+              child: const Text('Clear All Filters'),
             ),
           ],
         ),

@@ -225,7 +225,7 @@ class BacklogItem {
 
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}'; // HH:MM
   }
 
   // Get urgency color based on priority and time remaining

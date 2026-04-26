@@ -75,29 +75,32 @@ class _BacklogFilterDrawerState extends State<BacklogFilterDrawer> {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildRadioOption(
-                value: 'none',
-                groupValue: _filterBy,
-                label: 'No Filter',
-                onChanged: (v) => setState(() => _filterBy = v),
-              ),
-              const SizedBox(width: 16),
-              _buildRadioOption(
-                value: 'deadline',
-                groupValue: _filterBy,
-                label: 'Deadline',
-                onChanged: (v) => setState(() => _filterBy = v),
-              ),
-              const SizedBox(width: 16),
-              _buildRadioOption(
-                value: 'course',
-                groupValue: _filterBy,
-                label: 'Course',
-                onChanged: (v) => setState(() => _filterBy = v),
-              ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildRadioOption(
+                  value: 'none',
+                  groupValue: _filterBy,
+                  label: 'No Filter',
+                  onChanged: (v) => setState(() => _filterBy = v),
+                ),
+                const SizedBox(width: 16),
+                _buildRadioOption(
+                  value: 'deadline',
+                  groupValue: _filterBy,
+                  label: 'Deadline',
+                  onChanged: (v) => setState(() => _filterBy = v),
+                ),
+                const SizedBox(width: 16),
+                _buildRadioOption(
+                  value: 'course',
+                  groupValue: _filterBy,
+                  label: 'Course',
+                  onChanged: (v) => setState(() => _filterBy = v),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 20),
@@ -207,6 +210,7 @@ class _BacklogFilterDrawerState extends State<BacklogFilterDrawer> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
+              key: const Key('apply_filters_button'),
               onPressed: () {
                 widget.onApply(
                   filterBy: _filterBy,
@@ -246,6 +250,7 @@ class _BacklogFilterDrawerState extends State<BacklogFilterDrawer> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Radio<String>(
+          key: Key('radio_$value'),
           value: value,
           groupValue: groupValue,
           onChanged: (v) => onChanged(v ?? value),
