@@ -131,6 +131,11 @@ class LMSService {
   Future<bool> autoLoginLMS() async {
     try {
       print('Attempting auto-login for user: $userId');
+
+      // Clear existing session first to avoid conflicts
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('lms_session_$userId');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/auto-login'),
         headers: {'Content-Type': 'application/json'},
@@ -140,7 +145,14 @@ class LMSService {
       print('Auto-login response: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true;
+        final success = data['success'] == true;
+
+        if (success) {
+          // Store session info
+          await prefs.setString('lms_session_$userId', DateTime.now().toIso8601String());
+        }
+
+        return success;
       }
       return false;
     } catch (e) {

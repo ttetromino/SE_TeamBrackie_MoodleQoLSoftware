@@ -29,6 +29,26 @@ class _HomePageState extends State<HomePage>
 
   List<ArchivedCourse> _archivedCourses = [];
 
+  // LMS State
+  bool _isLMSLoggedIn = false;
+  bool _lmsLoading = false;
+  List<LmsCourse> _courses = [];
+  String? _lmsErrorMessage;
+
+  // US-07: Course Stats
+  CourseStats _stats = CourseStats();
+
+  final BiometricService _biometricService = BiometricService();
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
+
+  // Constants
+  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  // Flag to prevent duplicate auto-login
+  bool _isAutoLoggingIn = false;
+  bool _hasCheckedSession = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,26 +68,12 @@ class _HomePageState extends State<HomePage>
     final courses = await _archiveService.getArchivedCourses(
       widget.user['email'],
     );
-    setState(() {
-      _archivedCourses = courses;
-    });
+    if (mounted) {
+      setState(() {
+        _archivedCourses = courses;
+      });
+    }
   }
-
-  // LMS State
-  bool _isLMSLoggedIn = false;
-  bool _lmsLoading = false;
-  List<LmsCourse> _courses = [];
-  String? _lmsErrorMessage;
-
-  // US-07: Course Stats
-  CourseStats _stats = CourseStats();
-
-  final BiometricService _biometricService = BiometricService();
-  bool _biometricEnabled = false;
-  bool _biometricAvailable = false;
-
-  // Constants
-  static const String baseUrl = 'http://10.0.2.2:5000';
 
   @override
   void dispose() {
@@ -76,7 +82,6 @@ class _HomePageState extends State<HomePage>
   }
 
   // US-03: Navigate to Edit Profile
-  // US-03: Navigate to Edit Profile
   Future<void> _navigateToEditProfile() async {
     final result = await Navigator.push(
       context,
@@ -84,7 +89,6 @@ class _HomePageState extends State<HomePage>
         builder: (context) => EditProfilePage(
           user: widget.user,
           onProfileUpdated: (updatedUser) {
-            // COMPLETELY REPLACE the user object with the updated one
             setState(() {
               widget.user['name'] = updatedUser['name'];
               widget.user['email'] = updatedUser['email'];
@@ -94,10 +98,8 @@ class _HomePageState extends State<HomePage>
               }
             });
 
-            // Also update stored user data
             _updateStoredUser(widget.user);
 
-            // Show a snackbar confirming the update
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Profile updated successfully!'),
@@ -115,17 +117,39 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  // US-03: Update stored user data (ONLY ONE METHOD - remove the duplicate)
+  // US-03: Update stored user data
   Future<void> _updateStoredUser(Map<String, dynamic> updatedUser) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_data', jsonEncode(updatedUser));
   }
 
-  // Auto-login to LMS
+  // Auto-login to LMS - FIXED to prevent duplicate calls
   Future<void> _autoLoginToLMS() async {
+    // PREVENT duplicate calls
+    if (_isAutoLoggingIn) {
+      print('⚠️ Auto-login already in progress, skipping...');
+      return;
+    }
+
+    // Check if we already have a valid session from biometric login
+    final prefs = await SharedPreferences.getInstance();
+    final hasLmsSession = prefs.getString('lms_session_${widget.user['email']}') != null;
+
+    if (hasLmsSession && !_hasCheckedSession) {
+      print('✅ Existing LMS session found from biometric login, skipping auto-login');
+      _hasCheckedSession = true;
+      setState(() {
+        _isLMSLoggedIn = true;
+        _lmsLoading = false;
+      });
+      _loadCourses();
+      return;
+    }
+
     setState(() {
       _lmsLoading = true;
       _lmsErrorMessage = null;
+      _isAutoLoggingIn = true;
     });
 
     print('🔄 Attempting auto-login...');
@@ -134,9 +158,11 @@ class _HomePageState extends State<HomePage>
 
     if (success) {
       print('✅ Auto-login successful - session exists');
+      await prefs.setString('lms_session_${widget.user['email']}', DateTime.now().toIso8601String());
       setState(() {
         _isLMSLoggedIn = true;
         _lmsLoading = false;
+        _isAutoLoggingIn = false;
       });
       _loadCourses();
     } else {
@@ -147,9 +173,11 @@ class _HomePageState extends State<HomePage>
 
       if (retrySuccess) {
         print('✅ Auto-login successful on retry');
+        await prefs.setString('lms_session_${widget.user['email']}', DateTime.now().toIso8601String());
         setState(() {
           _isLMSLoggedIn = true;
           _lmsLoading = false;
+          _isAutoLoggingIn = false;
         });
         _loadCourses();
       } else {
@@ -157,28 +185,32 @@ class _HomePageState extends State<HomePage>
         setState(() {
           _isLMSLoggedIn = false;
           _lmsLoading = false;
+          _isAutoLoggingIn = false;
         });
       }
     }
   }
 
   Future<void> _loadCourses() async {
+    if (!mounted) return;
+
     setState(() {
       _lmsLoading = true;
       _lmsErrorMessage = null;
     });
 
     List<LmsCourse> courses = await _lmsService.getCourses();
-
     CourseStats stats = await _lmsService.getAllCoursesStats(courses);
 
-    setState(() {
-      _courses = courses;
-      _stats = stats;
-      _lmsLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _courses = courses;
+        _stats = stats;
+        _lmsLoading = false;
+      });
+    }
 
-    if (courses.isEmpty) {
+    if (courses.isEmpty && mounted) {
       setState(() {
         _lmsErrorMessage = 'No courses found';
       });
@@ -267,13 +299,17 @@ class _HomePageState extends State<HomePage>
                 lmsPassword,
               );
 
-              if (success) {
+              if (success && mounted) {
+                // Store session flag
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('lms_session_${widget.user['email']}', DateTime.now().toIso8601String());
+
                 setState(() {
                   _isLMSLoggedIn = true;
                   _lmsLoading = false;
                 });
                 _loadCourses();
-              } else {
+              } else if (mounted) {
                 setState(() {
                   _lmsLoading = false;
                   _lmsErrorMessage = 'Login failed. Please try again.';
@@ -307,7 +343,11 @@ class _HomePageState extends State<HomePage>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              // Clear LMS session flag on logout
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove('lms_session_${widget.user['email']}');
+
               Navigator.pop(context);
               Navigator.pushReplacementNamed(context, '/login');
             },
@@ -346,10 +386,12 @@ class _HomePageState extends State<HomePage>
     final enabled = await _biometricService.isBiometricEnabledForUser(
       widget.user['email'],
     );
-    setState(() {
-      _biometricAvailable = available;
-      _biometricEnabled = enabled;
-    });
+    if (mounted) {
+      setState(() {
+        _biometricAvailable = available;
+        _biometricEnabled = enabled;
+      });
+    }
   }
 
   Future<void> _toggleBiometric(bool value) async {
@@ -397,7 +439,7 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // Archive button in AppBar (WORKING)
+          // Archive button in AppBar
           Stack(
             children: [
               IconButton(
@@ -452,7 +494,6 @@ class _HomePageState extends State<HomePage>
             Tab(text: 'Profile', icon: Icon(Icons.person)),
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
             Tab(text: 'Backlog', icon: Icon(Icons.task)),
-            // NO Archive tab here - it's in AppBar
           ],
         ),
       ),
@@ -462,7 +503,6 @@ class _HomePageState extends State<HomePage>
           _buildProfileTab(),
           _buildCoursesTab(),
           BacklogPage(email: widget.user['email']),
-          // NO Archive page here
         ],
       ),
     );
@@ -479,7 +519,6 @@ class _HomePageState extends State<HomePage>
         ),
       ),
     );
-    // Refresh archived count when coming back
     _loadArchivedCourses();
   }
 
@@ -813,20 +852,15 @@ class _HomePageState extends State<HomePage>
 
   Widget _buildCoursesTab() {
     if (_lmsLoading) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const CircularProgressIndicator(
+            CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9D2BD1)),
             ),
-            const SizedBox(height: 16),
-            Text(
-              _isLMSLoggedIn
-                  ? 'Loading your courses...'
-                  : 'Connecting to LMS...',
-              style: const TextStyle(fontSize: 16),
-            ),
+            SizedBox(height: 16),
+            Text('Loading your courses...'),
           ],
         ),
       );
@@ -944,7 +978,6 @@ class _HomePageState extends State<HomePage>
               completedAssignments: _stats.completedAssignments,
             );
           }
-
           final course = _courses[index - 1];
           return _buildCourseCard(course);
         },
@@ -1023,7 +1056,6 @@ class _HomePageState extends State<HomePage>
                   ],
                 ),
               ),
-              // US-04-T-01: Archive button on course card
               IconButton(
                 onPressed: () => _showArchiveConfirmation(course),
                 icon: const Icon(Icons.archive_outlined, color: Colors.orange),
@@ -1048,7 +1080,6 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  // US-04-T-01: Archive confirmation modal
   Future<void> _showArchiveConfirmation(LmsCourse course) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1132,9 +1163,7 @@ class _HomePageState extends State<HomePage>
             duration: const Duration(seconds: 2),
           ),
         );
-        // Refresh courses list
         _loadCourses();
-        // Refresh archived count
         _loadArchivedCourses();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1147,7 +1176,6 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  // US-07: Progress Tracker
   Widget _buildProgressWidget({
     required int totalTasks,
     required int completedTasks,
@@ -1158,7 +1186,6 @@ class _HomePageState extends State<HomePage>
   }) {
     int total = totalTasks + totalQuizzes + totalAssignments;
     int completed = completedTasks + completedQuizzes + completedAssignments;
-
     double percent = total == 0 ? 0 : completed / total;
 
     return Container(
@@ -1194,9 +1221,7 @@ class _HomePageState extends State<HomePage>
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1217,8 +1242,6 @@ class _HomePageState extends State<HomePage>
                   Colors.purple,
                 ),
                 const SizedBox(height: 8),
-
-                // US-07: PROGRESS BAR
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
@@ -1228,7 +1251,6 @@ class _HomePageState extends State<HomePage>
                     child: Stack(
                       children: [
                         Container(height: 10, color: const Color(0xFF9D2BD1)),
-
                         FractionallySizedBox(
                           alignment: Alignment.centerLeft,
                           widthFactor: percent,
