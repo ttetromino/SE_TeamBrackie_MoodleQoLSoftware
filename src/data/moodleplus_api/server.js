@@ -24,7 +24,9 @@ const {
   verifyLMSCredentials,
   getCourses, 
   getCourseContents,
-  changeLMSPassword 
+  changeLMSPassword,
+  getGrades,
+  getCourseDetailedGrades
 } = require('./controllers/lmsController');
 
 // US-04: Archive controllers
@@ -79,6 +81,9 @@ app.get('/api/archive/courses/:email', getArchivedCourses);
 app.get('/api/archive/course/:email/:courseId', getArchivedCourseDetails);
 app.post('/api/archive/restore', restoreArchivedCourse);
 app.delete('/api/archive/course', deleteArchivedCourse);
+
+app.post('/api/lms/grades', getGrades);
+app.post('/api/lms/course-grades', getCourseDetailedGrades);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
