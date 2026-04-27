@@ -10,7 +10,7 @@ const userSessions = new Map();
 // Create LMS client with cookie support
 const createLMSClient = (cookies = []) => {
   const jar = new CookieJar();
-  
+
   if (cookies.length > 0) {
     cookies.forEach(cookie => {
       try {
@@ -76,7 +76,7 @@ const lmsLogin = async (req, res) => {
             { email: sessionId },
             {
               lmsCookies: cookieStrings,
-              lmsSessionExpiry: new Date(Date.now() + 60 * 60 * 1000)
+              lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
             }
           );
           console.log('Session stored in memory and database');
@@ -190,15 +190,36 @@ const autoLoginLMS = async (req, res) => {
 // Get Courses
 const getCourses = async (req, res) => {
   try {
-    const session = userSessions.get(req.body.userId);
+    let session = userSessions.get(req.body.userId);
+
+    // If no session in memory, try to restore from database
+    if (!session) {
+      console.log('No in-memory session, trying to restore from database...');
+      const user = await User.findOne({ email: req.body.userId });
+
+      if (user && user.lmsCookies && user.lmsCookies.length > 0) {
+        session = {
+          cookies: user.lmsCookies,
+          timestamp: Date.now(),
+          username: user.lmsUsername
+        };
+        userSessions.set(req.body.userId, session);
+        console.log('✅ Session restored from database');
+      }
+    }
+
     if (!session) {
       return res.status(401).json({ error: 'Not logged in' });
     }
 
     console.log('📚 Fetching courses...');
     const client = createLMSClient(session.cookies);
-    const response = await client.get('https://uphslms.com/my/courses.php');
 
+    // Check and refresh session if needed
+    const user = await User.findOne({ email: req.body.userId });
+    await ensureValidSession(req.body.userId, client, user);
+
+    const response = await client.get('https://uphslms.com/my/courses.php');
     const $ = cheerio.load(response.data);
     const courses = [];
 
@@ -335,9 +356,9 @@ const getCourseContents = async (req, res) => {
 
 // Cleanup old sessions
 setInterval(() => {
-  const oneHour = 3600000;
+  const oneDay = 24 * 3600000; // 24 hours instead of 1 hour
   for (const [id, session] of userSessions.entries()) {
-    if (Date.now() - session.timestamp > oneHour) {
+    if (Date.now() - session.timestamp > oneDay) {
       userSessions.delete(id);
       console.log('Removed expired session for user:', id);
     }
@@ -790,7 +811,245 @@ const getCourseDetailedGrades = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// US-11-T-02: Fetch calendar events from LMS
+async function ensureValidSession(userId, client, user) {
+  try {
+    // Check if session is still valid by accessing dashboard
+    const dashboard = await client.get('https://uphslms.com/my/', {
+      timeout: 10000,
+      validateStatus: (status) => status < 500
+    });
 
+    // If we're redirected to login page, session expired
+    if (dashboard.data.includes('Log in')) {
+      console.log('🔄 Session expired, re-logging in...');
+
+      // Re-login with stored credentials
+      const loginUrl = 'https://uphslms.com/login/index.php';
+      const loginPage = await client.get(loginUrl);
+      let $ = cheerio.load(loginPage.data);
+      const logintoken = $('input[name="logintoken"]').val();
+
+      await client.post(loginUrl,
+        new URLSearchParams({
+          username: user.lmsUsername,
+          password: user.lmsPassword,
+          logintoken: logintoken,
+          anchor: ''
+        }), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': 'https://uphslms.com/',
+            'Referer': loginUrl
+          }
+        });
+
+      // Get new cookies
+      const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
+      const cookieStrings = cookies.map(c => c.cookieString());
+
+      // Update session in memory and database
+      userSessions.set(userId, {
+        cookies: cookieStrings,
+        timestamp: Date.now(),
+        username: user.lmsUsername
+      });
+
+      await User.findOneAndUpdate(
+        { email: userId },
+        {
+          lmsCookies: cookieStrings,
+          lmsSessionExpiry: new Date(Date.now() + 60 * 60 * 1000),
+          lmsLastLogin: new Date()
+        }
+      );
+
+      console.log('✅ Session refreshed successfully');
+      return true;
+    }
+    return true;
+  } catch (error) {
+    console.log('Session check error:', error.message);
+    return false;
+  }
+}
+
+
+
+// Modified getCalendarEvents with auto session refresh
+const getCalendarEvents = async (req, res) => {
+  try {
+    let session = userSessions.get(req.body.userId);
+
+    // If no session in memory, try to restore from database
+    if (!session) {
+      console.log('No in-memory session, trying to restore from database...');
+      const user = await User.findOne({ email: req.body.userId });
+
+      if (user && user.lmsCookies && user.lmsCookies.length > 0) {
+        session = {
+          cookies: user.lmsCookies,
+          timestamp: Date.now(),
+          username: user.lmsUsername
+        };
+        userSessions.set(req.body.userId, session);
+        console.log('✅ Session restored from database');
+      }
+    }
+
+    if (!session) {
+      return res.status(401).json({ error: 'Not logged in' });
+    }
+
+    console.log('📅 Fetching calendar events for user:', req.body.userId);
+    const client = createLMSClient(session.cookies);
+
+    // Check and refresh session if needed
+    const user = await User.findOne({ email: req.body.userId });
+    await ensureValidSession(req.body.userId, client, user);
+
+    const events = [];
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+
+    // Fetch monthly calendar view
+    const calendarUrl = `https://uphslms.com/calendar/view.php?view=month&time=${Math.floor(currentDate.getTime() / 1000)}`;
+    const response = await client.get(calendarUrl);
+    const $ = cheerio.load(response.data);
+
+    // Parse events from calendar table
+    $('[data-region="event-item"]').each((i, element) => {
+      const eventLink = $(element).find('a');
+      const eventName = eventLink.text().trim();
+      const eventUrl = eventLink.attr('href');
+      const eventComponent = $(element).attr('data-event-component');
+      const eventType = $(element).attr('data-event-eventtype');
+
+      const parentDay = $(element).closest('[data-day]');
+      let eventDate = null;
+
+      if (parentDay.length > 0) {
+        const dayTimestamp = parentDay.attr('data-day-timestamp');
+        if (dayTimestamp) {
+          eventDate = new Date(parseInt(dayTimestamp) * 1000);
+        } else {
+          const dayNumber = parentDay.attr('data-day');
+          if (dayNumber) {
+            eventDate = new Date(year, month - 1, parseInt(dayNumber));
+          }
+        }
+      }
+
+      if (eventName && eventName !== 'more' && eventName !== 'more...' && eventDate) {
+        events.push({
+          id: `event_${i}_${Date.now()}`,
+          name: eventName,
+          url: eventUrl ? (eventUrl.startsWith('http') ? eventUrl : `https://uphslms.com${eventUrl}`) : null,
+          component: eventComponent,
+          type: eventType,
+          date: eventDate,
+          timestamp: eventDate.getTime()
+        });
+      }
+    });
+
+    // Also fetch upcoming events
+    const upcomingUrl = 'https://uphslms.com/calendar/view.php?view=upcoming';
+    const upcomingResponse = await client.get(upcomingUrl);
+    const $upcoming = cheerio.load(upcomingResponse.data);
+
+    $upcoming('.event, .calendar_event, .event_item').each((i, element) => {
+      const eventLink = $upcoming(element).find('a');
+      let eventName = eventLink.text().trim();
+      const eventUrl = eventLink.attr('href');
+
+      if (!eventName) {
+        eventName = $upcoming(element).find('.eventname').text().trim();
+      }
+
+      let eventDate = null;
+      const dateText = $upcoming(element).find('.date, .eventdate, .calendardate').text().trim();
+      if (dateText) {
+        const dateMatch = dateText.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/);
+        if (dateMatch) {
+          const day = parseInt(dateMatch[1]);
+          const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
+                             'july', 'august', 'september', 'october', 'november', 'december'];
+          const monthIndex = monthNames.findIndex(m => dateMatch[2].toLowerCase().startsWith(m));
+          const year = parseInt(dateMatch[3]);
+          if (monthIndex !== -1) {
+            eventDate = new Date(year, monthIndex, day);
+          }
+        }
+      }
+
+      if (eventName && eventName !== 'more' && eventName !== 'more...' && eventName.length > 0 && eventDate) {
+        const exists = events.some(e => e.name === eventName &&
+            e.date && Math.abs(e.date.getTime() - eventDate.getTime()) < 86400000);
+
+        if (!exists) {
+          events.push({
+            id: `upcoming_${i}_${Date.now()}`,
+            name: eventName,
+            url: eventUrl ? (eventUrl.startsWith('http') ? eventUrl : `https://uphslms.com${eventUrl}`) : null,
+            component: 'mod_assign',
+            type: 'due',
+            date: eventDate,
+            timestamp: eventDate.getTime()
+          });
+        }
+      }
+    });
+
+    // Remove duplicates and sort by date
+    const uniqueEvents = [];
+    const seen = new Set();
+
+    for (const event of events) {
+      const key = `${event.name}_${event.date?.toDateString()}`;
+      if (!seen.has(key) && event.name && event.name !== 'more' && event.name.length > 5) {
+        seen.add(key);
+        uniqueEvents.push(event);
+      }
+    }
+
+    uniqueEvents.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
+
+    console.log(`📅 Found ${uniqueEvents.length} unique calendar events`);
+
+    // Group by date
+    const eventsByDate = {};
+    for (const event of uniqueEvents) {
+      if (event.date) {
+        const dateKey = `${event.date.getFullYear()}-${event.date.getMonth() + 1}-${event.date.getDate()}`;
+        if (!eventsByDate[dateKey]) {
+          eventsByDate[dateKey] = [];
+        }
+        eventsByDate[dateKey].push({
+          id: event.id,
+          name: event.name,
+          url: event.url,
+          component: event.component,
+          type: event.type
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      events: uniqueEvents,
+      eventsByDate: eventsByDate,
+      month: month,
+      year: year,
+      lastUpdated: new Date()
+    });
+
+  } catch (error) {
+    console.error('Get calendar events error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
 module.exports = {
   lmsLogin,
   verifyLMSCredentials,
@@ -799,5 +1058,6 @@ module.exports = {
   getCourseContents,
   changeLMSPassword,
   getGrades,
-  getCourseDetailedGrades
+  getCourseDetailedGrades,
+  getCalendarEvents
 };

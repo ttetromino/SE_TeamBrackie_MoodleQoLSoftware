@@ -429,6 +429,149 @@ const updateProfilePicture = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+const addPersonalEvent = async (req, res) => {
+  try {
+    const { email, event } = req.body;
+
+    console.log('📝 Adding personal event for:', email);
+    console.log('   Event:', event.title);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const newEvent = {
+      id: event.id || Date.now().toString(),
+      title: event.title,
+      description: event.description || '',
+      date: new Date(event.date),
+      timeHour: event.timeHour || null,
+      timeMinute: event.timeMinute || null,
+      isAllDay: event.isAllDay ?? true,
+      courseName: event.courseName || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    user.personalEvents.push(newEvent);
+    await user.save();
+
+    console.log('✅ Personal event added successfully');
+    res.json({
+      success: true,
+      message: 'Personal event added',
+      event: newEvent
+    });
+
+  } catch (err) {
+    console.error('Add personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Get all personal events
+const getPersonalEvents = async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    console.log('📋 Fetching personal events for:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const events = user.personalEvents.sort((a, b) => a.date - b.date);
+
+    res.json({
+      success: true,
+      events: events
+    });
+
+  } catch (err) {
+    console.error('Get personal events error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Delete personal event
+const deletePersonalEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { email } = req.body;
+
+    console.log('🗑️ Deleting personal event:', eventId, 'for user:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const eventIndex = user.personalEvents.findIndex(e => e.id === eventId);
+    if (eventIndex === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    user.personalEvents.splice(eventIndex, 1);
+    await user.save();
+
+    console.log('✅ Personal event deleted');
+    res.json({
+      success: true,
+      message: 'Personal event deleted'
+    });
+
+  } catch (err) {
+    console.error('Delete personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Update personal event
+const updatePersonalEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { email, event } = req.body;
+
+    console.log('✏️ Updating personal event:', eventId, 'for user:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const eventIndex = user.personalEvents.findIndex(e => e.id === eventId);
+    if (eventIndex === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    user.personalEvents[eventIndex] = {
+      ...user.personalEvents[eventIndex],
+      title: event.title,
+      description: event.description,
+      date: new Date(event.date),
+      timeHour: event.timeHour,
+      timeMinute: event.timeMinute,
+      isAllDay: event.isAllDay,
+      courseName: event.courseName,
+      updatedAt: new Date()
+    };
+
+    await user.save();
+
+    console.log('✅ Personal event updated');
+    res.json({
+      success: true,
+      message: 'Personal event updated',
+      event: user.personalEvents[eventIndex]
+    });
+
+  } catch (err) {
+    console.error('Update personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
 module.exports = { 
   signup, 
   login, 
@@ -440,5 +583,9 @@ module.exports = {
   getBiometricStatus,
   changeAppPassword,
   updateEmail,        
-  updateProfilePicture
+  updateProfilePicture,
+  addPersonalEvent,
+  getPersonalEvents,
+  deletePersonalEvent,
+  updatePersonalEvent
 };

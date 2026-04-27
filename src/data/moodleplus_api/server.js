@@ -16,7 +16,11 @@ const {
   getBiometricStatus,
   changeAppPassword,
   updateEmail,
-  updateProfilePicture
+  updateProfilePicture,
+  addPersonalEvent,
+  getPersonalEvents,
+  deletePersonalEvent,
+  updatePersonalEvent
 } = require('./controllers/authController');
 
 const { 
@@ -26,7 +30,8 @@ const {
   getCourseContents,
   changeLMSPassword,
   getGrades,
-  getCourseDetailedGrades
+  getCourseDetailedGrades,
+  getCalendarEvents
 } = require('./controllers/lmsController');
 
 // US-04: Archive controllers
@@ -85,6 +90,8 @@ app.delete('/api/archive/course', deleteArchivedCourse);
 app.post('/api/lms/grades', getGrades);
 app.post('/api/lms/course-grades', getCourseDetailedGrades);
 
+app.post('/api/lms/calendar', getCalendarEvents);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -95,6 +102,12 @@ app.put('/api/backlog/pin/:itemId', togglePin);
 app.put('/api/backlog/complete/:itemId', completeItem);
 app.post('/api/backlog/layout', saveLayoutPreference);
 app.get('/api/backlog/layout/:email', getLayoutPreference);
+
+app.post('/api/user/personal-event', addPersonalEvent);
+app.get('/api/user/personal-events/:email', getPersonalEvents);
+app.delete('/api/user/personal-event/:eventId', deletePersonalEvent);
+app.put('/api/user/personal-event/:eventId', updatePersonalEvent);
+
 // Test route
 app.get('/', (req, res) => {
   res.json({ message: 'Server is running' });

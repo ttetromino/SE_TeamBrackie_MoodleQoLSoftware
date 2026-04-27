@@ -11,7 +11,7 @@ class LMSService {
   LMSService({required this.userId});
 
   // Get courses from LMS (exclude archived)
-  Future<List<LmsCourse>> getCourses() async {
+  Future<List<LmsCourse>> getCourses({int retryCount = 0}) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/courses'),
@@ -21,21 +21,28 @@ class LMSService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
-        // Get archived course IDs to filter them out
         final archivedIds = await _getArchivedCourseIds();
 
         List<LmsCourse> courses = [];
         for (var course in data['courses']) {
-          // US-04-T-02: Skip archived courses
           if (!archivedIds.contains(course['id'].toString())) {
             courses.add(LmsCourse.fromJson(course));
           }
         }
         return courses;
+      } else if (response.statusCode == 401 && retryCount < 2) {
+        // Session expired, try to re-authenticate
+        print('⚠️ Session expired, retrying... (attempt ${retryCount + 1})');
+        await Future.delayed(const Duration(seconds: 1));
+        return await getCourses(retryCount: retryCount + 1);
       }
       return [];
     } catch (e) {
+      if (retryCount < 2) {
+        print('⚠️ Request failed, retrying... (attempt ${retryCount + 1})');
+        await Future.delayed(const Duration(seconds: 1));
+        return await getCourses(retryCount: retryCount + 1);
+      }
       debugPrint('Get courses error: $e');
       return [];
     }

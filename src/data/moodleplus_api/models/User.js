@@ -7,7 +7,7 @@ const archivedCourseSchema = new mongoose.Schema({
   courseName: { type: String, required: true },
   courseUrl: { type: String, required: true },
   archivedAt: { type: Date, default: Date.now },
-  contents: { type: mongoose.Schema.Types.Mixed, default: {} }, // Store full course contents
+  contents: { type: mongoose.Schema.Types.Mixed, default: {} },
   thumbnail: { type: String, default: null },
   metadata: {
     originalEnrollmentDate: { type: Date, default: null },
@@ -17,27 +17,41 @@ const archivedCourseSchema = new mongoose.Schema({
   }
 });
 
+// US-11: Personal Event Schema
+const personalEventSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  title: { type: String, required: true },
+  description: { type: String, default: '' },
+  date: { type: Date, required: true },
+  timeHour: { type: Number, default: null },
+  timeMinute: { type: Number, default: null },
+  isAllDay: { type: Boolean, default: true },
+  courseName: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 const userSchema = new mongoose.Schema({
-  name: { 
-    type: String, 
-    required: true 
+  name: {
+    type: String,
+    required: true
   },
-  email: { 
-    type: String, 
-    unique: true, 
-    required: true 
+  email: {
+    type: String,
+    unique: true,
+    required: true
   },
-  password: { 
-    type: String, 
-    required: true 
+  password: {
+    type: String,
+    required: true
   },
-  lmsUsername: { 
-    type: String, 
-    required: true 
+  lmsUsername: {
+    type: String,
+    required: true
   },
-  lmsPassword: { 
-    type: String, 
-    required: true 
+  lmsPassword: {
+    type: String,
+    required: true
   },
   // Session persistence fields
   lmsCookies: {
@@ -74,6 +88,11 @@ const userSchema = new mongoose.Schema({
   preferences: {
     backlogLayout: { type: String, enum: ['compact', 'expanded'], default: 'compact' },
     lastBacklogSync: { type: Date, default: null }
+  },
+  // US-11: Personal events storage
+  personalEvents: {
+    type: [personalEventSchema],
+    default: []
   }
 });
 

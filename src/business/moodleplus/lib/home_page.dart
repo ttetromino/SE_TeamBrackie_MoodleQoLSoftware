@@ -12,6 +12,7 @@ import 'archived_courses_page.dart';
 import 'services/archive_service.dart';
 import 'backlog_page.dart';
 import 'gradebook_page.dart';
+import 'calendar_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -53,7 +54,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
     _archiveService = ArchiveService();
 
@@ -496,6 +497,7 @@ class _HomePageState extends State<HomePage>
             Tab(text: 'My Courses', icon: Icon(Icons.school)),
             Tab(text: 'Backlog', icon: Icon(Icons.task)),
             Tab(text: 'Gradebook', icon: Icon(Icons.grade)),
+            Tab(text: 'Calendar', icon: Icon(Icons.calendar_month)),
           ],
         ),
       ),
@@ -506,6 +508,7 @@ class _HomePageState extends State<HomePage>
           _buildCoursesTab(),
           BacklogPage(email: widget.user['email']),
           GradebookPage(email: widget.user['email']),
+          CalendarPage(email: widget.user['email']),
         ],
       ),
     );
