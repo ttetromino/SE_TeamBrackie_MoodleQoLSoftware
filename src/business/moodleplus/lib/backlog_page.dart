@@ -2,13 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/backlog_service.dart';
+import 'services/course_service.dart';
 import 'backlog_filter_drawer.dart';
 import 'backlog_item_card.dart';
 
 class BacklogPage extends StatefulWidget {
   final String email;
+  final VoidCallback? onTaskCompleted;
 
-  const BacklogPage({super.key, required this.email});
+  const BacklogPage({super.key, required this.email, this.onTaskCompleted});
 
   @override
   State<BacklogPage> createState() => _BacklogPageState();
@@ -16,11 +18,13 @@ class BacklogPage extends StatefulWidget {
 
 class _BacklogPageState extends State<BacklogPage> {
   final BacklogService _backlogService = BacklogService();
+  final CourseService _courseService = CourseService();
 
   List<BacklogItem> _items = [];
   bool _isLoading = true;
   bool _isSyncing = false;
   String _layoutMode = 'compact';
+  String? _errorMessage;
 
   // Filter state
   String _currentFilterBy = 'none';
@@ -29,95 +33,127 @@ class _BacklogPageState extends State<BacklogPage> {
   List<String> _availableCourseCodes = [];
   bool _showPinnedOnly = false;
 
-  // Sync timer
-  static const int syncIntervalMinutes = 60;
-
   @override
   void initState() {
     super.initState();
     _loadPreferences();
     _loadBacklogItems();
-    _checkAndSync();
   }
 
   Future<void> _loadPreferences() async {
     final layout = await _backlogService.getLayoutPreference(widget.email);
     final filters = await _backlogService.getFilterPreferences(widget.email);
 
-    setState(() {
-      _layoutMode = layout;
-      _currentFilterBy = filters['filterBy'];
-      _currentPriority = filters['priority'];
-      _currentCourseCode = filters['courseCode'];
-    });
+    if (mounted) {
+      setState(() {
+        _layoutMode = layout;
+        _currentFilterBy = filters['filterBy'];
+        _currentPriority = filters['priority'];
+        _currentCourseCode = filters['courseCode'];
+      });
+    }
   }
 
   Future<void> _loadBacklogItems() async {
-    setState(() => _isLoading = true);
-
-    final items = await _backlogService.getBacklogItems(
-      email: widget.email,
-      filterBy: _currentFilterBy == 'none' ? null : _currentFilterBy,
-      priority: _currentPriority,
-      courseCode: _currentCourseCode == 'all' ? null : _currentCourseCode,
-      showPinnedOnly: _showPinnedOnly,
-    );
-
-    // Extract unique course codes for filter
-    final courseCodes = items.map((i) => i.courseCode).toSet().toList();
-    courseCodes.sort();
+    if (!mounted) return;
 
     setState(() {
-      _items = items;
-      _availableCourseCodes = courseCodes;
-      _isLoading = false;
+      _isLoading = true;
+      _errorMessage = null;
     });
-  }
 
-  Future<void> _checkAndSync() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastSync = prefs.getString('last_backlog_sync_${widget.email}');
-    final shouldSync =
-        lastSync == null ||
-        DateTime.now().difference(DateTime.parse(lastSync)).inMinutes >
-            syncIntervalMinutes;
+    try {
+      final items = await _backlogService.getBacklogItems(
+        email: widget.email,
+        filterBy: _currentFilterBy == 'none' ? null : _currentFilterBy,
+        priority: _currentPriority,
+        courseCode: _currentCourseCode == 'all' ? null : _currentCourseCode,
+        showPinnedOnly: _showPinnedOnly,
+      );
 
-    if (shouldSync) {
-      await _syncBacklog();
+      final courseCodes = items.map((i) => i.courseCode).toSet().toList();
+      courseCodes.sort();
+
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _availableCourseCodes = courseCodes;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading backlog items: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load tasks';
+        });
+      }
     }
   }
 
   Future<void> _syncBacklog() async {
-    setState(() => _isSyncing = true);
+    if (_isSyncing) return;
 
-    final count = await _backlogService.syncBacklog(widget.email);
+    setState(() {
+      _isSyncing = true;
+      _errorMessage = null;
+    });
 
-    if (count > 0) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'last_backlog_sync_${widget.email}',
-        DateTime.now().toIso8601String(),
-      );
-      await _loadBacklogItems();
+    try {
+      final count = await _backlogService.syncBacklog(widget.email);
 
+      if (mounted) {
+        if (count > 0) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            'last_backlog_sync_${widget.email}',
+            DateTime.now().toIso8601String(),
+          );
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Synced $count new tasks'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          await _loadBacklogItems();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No new tasks found'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Sync error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Synced $count new tasks'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
+            content: Text('Sync failed: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
     }
-
-    setState(() => _isSyncing = false);
   }
 
   Future<void> _togglePin(BacklogItem item) async {
-    final success = await _backlogService.togglePin(item.id, widget.email);
-    if (success) {
-      await _loadBacklogItems();
+    try {
+      final success = await _backlogService.togglePin(item.id, widget.email);
+      if (success && mounted) {
+        await _loadBacklogItems();
+      }
+    } catch (e) {
+      print('Toggle pin error: $e');
     }
   }
 
@@ -144,18 +180,60 @@ class _BacklogPageState extends State<BacklogPage> {
       ),
     );
 
-    if (confirmed == true) {
-      final success = await _backlogService.completeItem(item.id, widget.email);
-      if (success) {
-        await _loadBacklogItems();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Task completed!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+    if (confirmed != true) return;
+
+    // OPTIMISTIC UI UPDATE - Remove immediately for better UX
+    setState(() {
+      _items.removeWhere((i) => i.id == item.id);
+    });
+
+    setState(() => _isLoading = true);
+
+    try {
+      final success = await _backlogService.completeItem(
+        item.id,
+        widget.email,
+        item: item, // Pass the item directly
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Task completed! Progress updated.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Refresh stats on home page
+        widget.onTaskCompleted?.call();
+      } else {
+        // If failed, add the item back
+        setState(() {
+          _items.add(item);
+          _items.sort((a, b) => a.dueDate?.compareTo(b.dueDate ?? DateTime.now()) ?? 0);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to complete task'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // If failed, add the item back
+      setState(() {
+        _items.add(item);
+        _items.sort((a, b) => a.dueDate?.compareTo(b.dueDate ?? DateTime.now()) ?? 0);
+      });
+      print('Complete task error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to complete task: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -199,10 +277,8 @@ class _BacklogPageState extends State<BacklogPage> {
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // Layout toggle button
           IconButton(
             icon: Icon(
-              key: const Key('toggle_layout_button'),
               _layoutMode == 'compact' ? Icons.view_module : Icons.view_agenda,
             ),
             onPressed: _toggleLayout,
@@ -210,31 +286,24 @@ class _BacklogPageState extends State<BacklogPage> {
                 ? 'Switch to expanded view'
                 : 'Switch to compact view',
           ),
-          // Sync button
-          Stack(
-            children: [
-              IconButton(
-                icon: _isSyncing
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.sync),
-                onPressed: _isSyncing ? null : _syncBacklog,
-                tooltip: 'Sync with LMS',
-              ),
-            ],
-          ),
-          // Filter button
           IconButton(
-            key: const Key('filter_button'),
+            icon: _isSyncing
+                ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.sync),
+            onPressed: _isSyncing ? null : _syncBacklog,
+            tooltip: 'Sync with LMS',
+          ),
+          IconButton(
             icon: Badge(
               isLabelVisible:
-                  _currentFilterBy != 'none' ||
+              _currentFilterBy != 'none' ||
                   _currentPriority != 'all' ||
                   _showPinnedOnly,
               child: const Icon(Icons.filter_list),
@@ -280,6 +349,33 @@ class _BacklogPageState extends State<BacklogPage> {
       );
     }
 
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _syncBacklog,
+              icon: const Icon(Icons.sync),
+              label: const Text('Sync with LMS'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF9D2BD1),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_items.isEmpty) {
       return Center(
         child: Column(
@@ -299,7 +395,7 @@ class _BacklogPageState extends State<BacklogPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'No Tasks Found',  // TC33: Clear message
+              'No Tasks Found',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -333,7 +429,6 @@ class _BacklogPageState extends State<BacklogPage> {
       );
     }
 
-    // Separate pinned and unpinned items
     final pinnedItems = _items.where((i) => i.isPinned).toList();
     final unpinnedItems = _items.where((i) => !i.isPinned).toList();
 
@@ -342,7 +437,6 @@ class _BacklogPageState extends State<BacklogPage> {
       color: const Color(0xFF9D2BD1),
       child: CustomScrollView(
         slivers: [
-          // Stats header
           SliverToBoxAdapter(
             child: Container(
               padding: const EdgeInsets.all(16),
@@ -374,8 +468,6 @@ class _BacklogPageState extends State<BacklogPage> {
               ),
             ),
           ),
-
-          // Pinned section
           if (pinnedItems.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -384,42 +476,20 @@ class _BacklogPageState extends State<BacklogPage> {
                   children: [
                     const Icon(Icons.push_pin, size: 16, color: Colors.blue),
                     const SizedBox(width: 8),
-                    const Text(
-                      'PINNED',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
+                    const Text('PINNED', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${pinnedItems.length}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      child: Text('${pinnedItems.length}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
                     ),
                   ],
                 ),
               ),
             ),
-
-          // Pinned items
           SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => BacklogItemCard(
+                  (context, index) => BacklogItemCard(
                 item: pinnedItems[index],
                 layoutMode: _layoutMode,
                 onTogglePin: () => _togglePin(pinnedItems[index]),
@@ -428,8 +498,6 @@ class _BacklogPageState extends State<BacklogPage> {
               childCount: pinnedItems.length,
             ),
           ),
-
-          // All tasks section
           if (unpinnedItems.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -438,42 +506,20 @@ class _BacklogPageState extends State<BacklogPage> {
                   children: [
                     const Icon(Icons.list_alt, size: 16, color: Colors.grey),
                     const SizedBox(width: 8),
-                    const Text(
-                      'ALL TASKS',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
+                    const Text('ALL TASKS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${unpinnedItems.length}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                        ),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.grey.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                      child: Text('${unpinnedItems.length}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                     ),
                   ],
                 ),
               ),
             ),
-
-          // Unpinned items
           SliverList(
             delegate: SliverChildBuilderDelegate(
-              (context, index) => BacklogItemCard(
+                  (context, index) => BacklogItemCard(
                 item: unpinnedItems[index],
                 layoutMode: _layoutMode,
                 onTogglePin: () => _togglePin(unpinnedItems[index]),
@@ -482,7 +528,6 @@ class _BacklogPageState extends State<BacklogPage> {
               childCount: unpinnedItems.length,
             ),
           ),
-
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
       ),
@@ -509,14 +554,8 @@ class _BacklogPageState extends State<BacklogPage> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              value,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-            ),
+            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
           ],
         ),
       ],

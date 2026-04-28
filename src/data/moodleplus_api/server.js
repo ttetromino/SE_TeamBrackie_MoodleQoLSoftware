@@ -1,13 +1,13 @@
-// server.js (updated routes section)
+// server.js
 const express = require('express');
 require('dotenv').config();
 
 const connectDB = require('./config/db');
 const { startSessionCleanup } = require('./utils/sessionStore');
 
-const { 
-  signup, 
-  login, 
+const {
+  signup,
+  login,
   updateLMSCredentials,
   autoLoginLMS,
   enableBiometricLogin,
@@ -23,16 +23,31 @@ const {
   updatePersonalEvent
 } = require('./controllers/authController');
 
-const { 
-  lmsLogin, 
+const {
+  lmsLogin,
   verifyLMSCredentials,
-  getCourses, 
+  getCourses,
   getCourseContents,
   changeLMSPassword,
   getGrades,
   getCourseDetailedGrades,
   getCalendarEvents
 } = require('./controllers/lmsController');
+
+// Course controllers - only import what exists
+const {
+  getStoredCourses,
+  getStoredCourse,
+  getCourseContentsFromDB,
+  updateActivityCompletion,
+  getCourseStats,
+  triggerBackgroundSync,
+  syncAllCourses,
+  syncCourseToDatabase,
+  syncCourseById,
+  updateActivityByUrl,
+
+} = require('./controllers/courseController');
 
 // US-04: Archive controllers
 const {
@@ -46,11 +61,14 @@ const {
 const {
   syncBacklog,
   getBacklogItems,
+  getBacklogItem,
   togglePin,
   completeItem,
   saveLayoutPreference,
-  getLayoutPreference
+  getLayoutPreference,
+  completeItemByActivity
 } = require('./controllers/backlogController');
+
 const app = express();
 app.use(express.json());
 
@@ -67,12 +85,13 @@ app.post('/api/lms/login', lmsLogin);
 app.post('/api/lms/verify', verifyLMSCredentials);
 app.post('/api/lms/auto-login', autoLoginLMS);
 app.post('/api/lms/courses', getCourses);
-app.post('/api/lms/course-contents', getCourseContents); 
+app.post('/api/lms/course-contents', getCourseContents);
 app.put('/api/user/lms-credentials', updateLMSCredentials);
 app.post('/api/lms/change-password', changeLMSPassword);
 app.post('/api/user/change-password', changeAppPassword);
 app.put('/api/user/email', updateEmail);
 app.put('/api/user/profile-picture', updateProfilePicture);
+app.put('/api/backlog/complete-by-activity', completeItemByActivity);
 
 // Biometric routes
 app.post('/api/biometric/enable', enableBiometricLogin);
@@ -87,13 +106,12 @@ app.get('/api/archive/course/:email/:courseId', getArchivedCourseDetails);
 app.post('/api/archive/restore', restoreArchivedCourse);
 app.delete('/api/archive/course', deleteArchivedCourse);
 
+// Grade routes
 app.post('/api/lms/grades', getGrades);
 app.post('/api/lms/course-grades', getCourseDetailedGrades);
 
+// Calendar routes
 app.post('/api/lms/calendar', getCalendarEvents);
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // US-13: Backlog routes
 app.post('/api/backlog/sync', syncBacklog);
@@ -102,11 +120,25 @@ app.put('/api/backlog/pin/:itemId', togglePin);
 app.put('/api/backlog/complete/:itemId', completeItem);
 app.post('/api/backlog/layout', saveLayoutPreference);
 app.get('/api/backlog/layout/:email', getLayoutPreference);
+app.get('/api/backlog/item/:itemId', getBacklogItem);
 
+// Personal events routes
 app.post('/api/user/personal-event', addPersonalEvent);
 app.get('/api/user/personal-events/:email', getPersonalEvents);
 app.delete('/api/user/personal-event/:eventId', deletePersonalEvent);
 app.put('/api/user/personal-event/:eventId', updatePersonalEvent);
+
+// Course storage routes - FIXED: only use existing functions
+app.get('/api/course/stored/:email', getStoredCourses);
+app.get('/api/course/stored/:email/:courseId', getStoredCourse);
+app.get('/api/course/contents/:email/:courseId', getCourseContentsFromDB);
+app.put('/api/course/activity-complete', updateActivityCompletion);
+app.get('/api/course/stats/:email', getCourseStats);
+app.post('/api/course/sync-background', triggerBackgroundSync);
+app.post('/api/course/sync', syncCourseToDatabase);
+app.post('/api/course/sync-all', syncAllCourses);
+app.post('/api/course/sync-by-id', syncCourseById);
+app.put('/api/course/activity-complete-by-url', updateActivityByUrl);
 
 // Test route
 app.get('/', (req, res) => {

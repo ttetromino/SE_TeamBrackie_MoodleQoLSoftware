@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'course_service.dart';
 
 class BacklogService {
   static const String baseUrl = 'http://10.0.2.2:5000';
@@ -84,21 +85,84 @@ class BacklogService {
   }
 
   // Mark item as completed
-  Future<bool> completeItem(String itemId, String email) async {
+  Future<bool> completeItem(String itemId, String email, {BacklogItem? item}) async {
     try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/api/backlog/complete/$itemId'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
+      // If item is provided, use it directly
+      if (item == null) {
+        print('❌ No item data provided, cannot complete');
+        return false;
+      }
+
+      print('📝 Marking backlog item complete: ${item.activityName}');
+
+      // Use the SAME course service endpoint that works in Course Contents
+      final courseService = CourseService();
+      final result = await courseService.markActivityComplete(
+        email: email,
+        courseId: item.courseId,
+        activityId: item.activityId,
+        isCompleted: true,
       );
 
-      final data = jsonDecode(response.body);
-      return response.statusCode == 200 && data['success'] == true;
+      if (result['success'] == true) {
+        // Also mark the backlog item as completed in backlog collection
+        final response = await http.put(
+          Uri.parse('$baseUrl/api/backlog/complete/$itemId'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email}),
+        );
+
+        print('✅ Backlog item completed and course activity updated');
+        return true;
+      }
+
+      return false;
     } catch (e) {
       print('Complete item error: $e');
       return false;
     }
   }
+
+// Add this helper method to get a single backlog item
+  Future<BacklogItem?> getBacklogItem(String itemId, String email) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/backlog/item/$itemId?email=$email'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return BacklogItem.fromJson(data['item']);
+      }
+      return null;
+    } catch (e) {
+      print('Get backlog item error: $e');
+      return null;
+    }
+  }
+
+  // Mark backlog item as complete by activity ID and course ID
+  Future<bool> completeBacklogItemByActivity(String email, String courseId, String activityId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/backlog/complete-by-activity'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'courseId': courseId,
+          'activityId': activityId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      print('Complete backlog item by activity error: $e');
+      return false;
+    }
+  }
+
+
 
   // Save layout preference
   Future<bool> saveLayoutPreference(String email, String layoutMode) async {
@@ -205,6 +269,7 @@ class BacklogItem {
       isCompleted: json['isCompleted'] ?? false,
       sectionName: json['sectionName'] ?? '',
       activityUrl: json['activityUrl'],
+
     );
   }
 

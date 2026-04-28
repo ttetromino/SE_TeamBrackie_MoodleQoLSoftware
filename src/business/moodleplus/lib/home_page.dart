@@ -13,6 +13,8 @@ import 'services/archive_service.dart';
 import 'backlog_page.dart';
 import 'gradebook_page.dart';
 import 'calendar_page.dart';
+import 'services/course_service.dart';
+import 'package:http/http.dart' as http;
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -28,12 +30,14 @@ class _HomePageState extends State<HomePage>
   late TabController _tabController;
   late LMSService _lmsService;
   late ArchiveService _archiveService;
+  late CourseService _courseService;
 
   List<ArchivedCourse> _archivedCourses = [];
 
   // LMS State
   bool _isLMSLoggedIn = false;
   bool _lmsLoading = false;
+  bool _isSyncing = false;
   List<LmsCourse> _courses = [];
   String? _lmsErrorMessage;
 
@@ -54,6 +58,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
+    _courseService = CourseService();
     _tabController = TabController(length: 5, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
     _archiveService = ArchiveService();
@@ -63,6 +68,268 @@ class _HomePageState extends State<HomePage>
       _loadArchivedCourses();
     });
     _checkBiometricStatus();
+  }
+
+  Future<void> _manualSyncCourses() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+      _lmsErrorMessage = null;
+    });
+
+    // Show loading dialog for first-time sync
+    if (_courses.isEmpty) {
+      _showSyncProgressDialog();
+    }
+
+    try {
+      print('🔄 Manual sync triggered for ${widget.user['email']}');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/course/sync-all'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': widget.user['email']}),
+      );
+
+      final data = jsonDecode(response.body);
+      print('📥 Sync response: ${response.statusCode}');
+
+      // Close dialog if it was shown
+      if (_courses.isEmpty && mounted) {
+        Navigator.pop(context);
+      }
+
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Sync started! Loading courses...'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // AUTO-REFRESH - Poll for courses to appear
+        await _waitForCoursesAndRefresh();
+
+      } else {
+        throw Exception(data['error'] ?? 'Sync failed');
+      }
+    } catch (e) {
+      print('Sync error: $e');
+      if (_courses.isEmpty && mounted) {
+        Navigator.pop(context);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
+    }
+  }
+
+// New method: Wait for courses and auto-refresh
+  Future<void> _waitForCoursesAndRefresh() async {
+    int attempts = 0;
+    const maxAttempts = 30; // 30 seconds max
+
+    print('⏳ Waiting for courses to sync...');
+
+    while (attempts < maxAttempts && mounted) {
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Try to load courses from database
+      final storedCourses = await _courseService.getStoredCourses(widget.user['email']);
+
+      if (storedCourses.isNotEmpty) {
+        // Courses found! Refresh the UI
+        print('✅ Found ${storedCourses.length} courses, refreshing UI...');
+
+        await _loadCourses();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully loaded ${storedCourses.length} courses!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      attempts++;
+      print('⏳ Waiting for courses... attempt $attempts/$maxAttempts');
+    }
+
+    // Timeout - courses didn't appear
+    if (mounted) {
+      print('⚠️ Timeout waiting for courses');
+      await _loadCourses(); // Try one final refresh
+
+      final finalCheck = await _courseService.getStoredCourses(widget.user['email']);
+      if (finalCheck.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sync completed but no courses found. Try refreshing manually.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+// Add this method for showing sync progress dialog
+  void _showSyncProgressDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF9D2BD1)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Syncing Your Courses',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This may take a moment...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your courses are being loaded from LMS. You will be notified when complete.',
+                      style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// Poll for courses to appear after sync
+  Future<void> _pollForCourses() async {
+    int attempts = 0;
+    const maxAttempts = 30; // 30 seconds max
+
+    while (attempts < maxAttempts && mounted) {
+      await Future.delayed(const Duration(seconds: 2));
+
+      final storedCourses = await _courseService.getStoredCourses(widget.user['email']);
+
+      if (storedCourses.isNotEmpty) {
+        await _loadCourses();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Successfully loaded ${storedCourses.length} courses!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        return;
+      }
+
+      attempts++;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sync taking longer than expected. Try refreshing manually.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  Future<void> _forceSyncCourses() async {
+    if (!_isLMSLoggedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login to LMS first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _lmsLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/course/sync-all'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': widget.user['email']}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Synced ${data['coursesCount']} courses!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Reload courses
+        await _loadCourses();
+      } else {
+        throw Exception('Sync failed');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _lmsLoading = false;
+        });
+      }
+    }
   }
 
   // Load archived courses for count display
@@ -201,20 +468,75 @@ class _HomePageState extends State<HomePage>
       _lmsErrorMessage = null;
     });
 
-    List<LmsCourse> courses = await _lmsService.getCourses();
-    CourseStats stats = await _lmsService.getAllCoursesStats(courses);
+    try {
+      // Load from database
+      List<StoredCourse> storedCourses = await _courseService.getStoredCourses(widget.user['email']);
 
-    if (mounted) {
-      setState(() {
-        _courses = courses;
-        _stats = stats;
-        _lmsLoading = false;
-      });
+      if (storedCourses.isNotEmpty) {
+        _courses = storedCourses.map((c) => LmsCourse(
+          id: c.courseId,
+          name: c.courseName,
+          link: c.courseUrl,
+        )).toList();
+
+        final statsData = await _courseService.getCourseStats(widget.user['email']);
+        _stats = CourseStats(
+          totalTasks: statsData.totalTasks,
+          completedTasks: statsData.completedTasks,
+          totalQuizzes: statsData.totalQuizzes,
+          completedQuizzes: statsData.completedQuizzes,
+          totalAssignments: statsData.totalAssignments,
+          completedAssignments: statsData.completedAssignments,
+        );
+
+        print('✅ Loaded ${_courses.length} courses');
+      } else {
+        _courses = [];
+        print('⚠️ No courses found in database');
+      }
+
+      if (mounted) {
+        setState(() {
+          _lmsLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Load courses error: $e');
+      if (mounted) {
+        setState(() {
+          _lmsLoading = false;
+          _lmsErrorMessage = 'Failed to load courses: $e';
+        });
+      }
+    }
+  }
+
+
+  // Background sync for fresh data
+  Future<void> _syncFreshCourseData() async {
+    // Sync each course to get latest completion status
+    for (final course in _courses) {
+      await _courseService.syncCourse(
+        email: widget.user['email'],
+        courseId: course.id,
+        courseName: course.name,
+        courseUrl: course.link,
+        forceRefresh: false, // Only sync if cache is old
+      );
     }
 
-    if (courses.isEmpty && mounted) {
+    // Refresh stats
+    final statsData = await _courseService.getCourseStats(widget.user['email']);
+    if (mounted) {
       setState(() {
-        _lmsErrorMessage = 'No courses found';
+        _stats = CourseStats(
+          totalTasks: statsData.totalTasks,
+          completedTasks: statsData.completedTasks,
+          totalQuizzes: statsData.totalQuizzes,
+          completedQuizzes: statsData.completedQuizzes,
+          totalAssignments: statsData.totalAssignments,
+          completedAssignments: statsData.completedAssignments,
+        );
       });
     }
   }
@@ -383,6 +705,8 @@ class _HomePageState extends State<HomePage>
     );
   }
 
+
+
   Future<void> _checkBiometricStatus() async {
     final available = await _biometricService.isBiometricAvailable();
     final enabled = await _biometricService.isBiometricEnabledForUser(
@@ -433,6 +757,45 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  Future<void> _refreshCourseStats() async {
+    if (!_isLMSLoggedIn) return;
+    if (!mounted) return;
+
+    print('🔄 Refreshing course stats');
+
+    setState(() {
+      _lmsLoading = true;
+    });
+
+    try {
+      // Get fresh stats from database (not from sync)
+      final statsData = await _courseService.getCourseStats(widget.user['email']);
+
+      if (mounted) {
+        setState(() {
+          _stats = CourseStats(
+            totalTasks: statsData.totalTasks,
+            completedTasks: statsData.completedTasks,
+            totalQuizzes: statsData.totalQuizzes,
+            completedQuizzes: statsData.completedQuizzes,
+            totalAssignments: statsData.totalAssignments,
+            completedAssignments: statsData.completedAssignments,
+          );
+          _lmsLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Refresh stats error: $e');
+      if (mounted) {
+        setState(() {
+          _lmsLoading = false;
+        });
+      }
+    }
+  }
+
+  // Navigate to archived courses
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -441,7 +804,22 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // Archive button in AppBar
+          // Sync/Update button
+          IconButton(
+            icon: _isSyncing
+                ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.cloud_sync),
+            onPressed: _isSyncing ? null : _manualSyncCourses,
+            tooltip: 'Sync/Update Courses',
+          ),
+          // Archive button
           Stack(
             children: [
               IconButton(
@@ -486,35 +864,43 @@ class _HomePageState extends State<HomePage>
             onPressed: _showLogoutConfirmation,
             tooltip: 'Logout',
           ),
+          IconButton(
+            icon: const Icon(Icons.cloud_sync),
+            onPressed: _manualSyncCourses,
+            tooltip: 'Sync all courses (first time only)',
+          ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'Profile', icon: Icon(Icons.person)),
-            Tab(text: 'My Courses', icon: Icon(Icons.school)),
-            Tab(text: 'Backlog', icon: Icon(Icons.task)),
-            Tab(text: 'Gradebook', icon: Icon(Icons.grade)),
-            Tab(text: 'Calendar', icon: Icon(Icons.calendar_month)),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: TabBar(
+            key: const Key('home_tab_bar'),
+            controller: _tabController,
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            tabs: const [
+              Tab(text: 'Profile', icon: Icon(Icons.person)),
+              Tab(text: 'My Courses', icon: Icon(Icons.school)),
+              Tab(text: 'Backlog', icon: Icon(Icons.task)),
+              Tab(text: 'Gradebook', icon: Icon(Icons.grade)),
+              Tab(text: 'Calendar', icon: Icon(Icons.calendar_month)),
+            ],
+          ),
         ),
       ),
       body: TabBarView(
+        key: const Key('home_tab_view'),
         controller: _tabController,
         children: [
           _buildProfileTab(),
           _buildCoursesTab(),
-          BacklogPage(email: widget.user['email']),
+          BacklogPage(email: widget.user['email'], onTaskCompleted: _refreshCourseStats),
           GradebookPage(email: widget.user['email']),
           CalendarPage(email: widget.user['email']),
         ],
       ),
     );
   }
-
-  // Navigate to archived courses
   Future<void> _navigateToArchivedCourses() async {
     await Navigator.push(
       context,
@@ -935,34 +1321,122 @@ class _HomePageState extends State<HomePage>
       );
     }
 
+    // Show sync button prominently if no courses
     if (_courses.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_open, size: 80, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            const Text(
-              'No Courses Found',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_sync,
+                    size: 60,
+                    color: Color(0xFF9D2BD1),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'No Courses Found',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your LMS courses haven\'t been synced yet.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'What happens when you sync?',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '• Your enrolled courses will appear here\n'
+                            '• Course activities will be cached locally\n'
+                            '• You can track your progress\n'
+                            '• You only need to do this once',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'First sync may take 30-60 seconds depending on your courses',
+                        style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: 250,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSyncing ? null : _manualSyncCourses,
+                    icon: _isSyncing
+                        ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(Icons.cloud_sync, size: 28),
+                    label: Text(
+                      _isSyncing ? 'SYNCING...' : 'SYNC COURSES NOW',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9D2BD1),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: _loadCourses,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              'You are not enrolled in any courses yet',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadCourses,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF9D2BD1),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -975,13 +1449,46 @@ class _HomePageState extends State<HomePage>
         itemCount: _courses.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _buildProgressWidget(
-              totalTasks: _stats.totalTasks,
-              completedTasks: _stats.completedTasks,
-              totalQuizzes: _stats.totalQuizzes,
-              completedQuizzes: _stats.completedQuizzes,
-              totalAssignments: _stats.totalAssignments,
-              completedAssignments: _stats.completedAssignments,
+            // Add a small update button above progress widget
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _isSyncing ? null : _manualSyncCourses,
+                        icon: _isSyncing
+                            ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF9D2BD1),
+                          ),
+                        )
+                            : const Icon(Icons.cloud_sync, size: 16),
+                        label: Text(
+                          _isSyncing ? 'Syncing...' : 'Update Courses',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF9D2BD1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildProgressWidget(
+                  totalTasks: _stats.totalTasks,
+                  completedTasks: _stats.completedTasks,
+                  totalQuizzes: _stats.totalQuizzes,
+                  completedQuizzes: _stats.completedQuizzes,
+                  totalAssignments: _stats.totalAssignments,
+                  completedAssignments: _stats.completedAssignments,
+                ),
+              ],
             );
           }
           final course = _courses[index - 1];
@@ -1003,8 +1510,9 @@ class _HomePageState extends State<HomePage>
             MaterialPageRoute(
               builder: (context) => CourseContentsPage(
                 courseName: course.name,
-                courseUrl: course.link,
-                lmsService: _lmsService,
+                courseId: course.id,  // Changed: use courseId instead of courseUrl
+                email: widget.user['email'],
+                onActivityCompleted: _refreshCourseStats,// Changed: pass email
               ),
             ),
           );
@@ -1190,8 +1698,9 @@ class _HomePageState extends State<HomePage>
     required int totalAssignments,
     required int completedAssignments,
   }) {
-    int total = totalTasks + totalQuizzes + totalAssignments;
-    int completed = completedTasks + completedQuizzes + completedAssignments;
+    // Only count quizzes and assignments (exclude regular tasks if they're just resources)
+    int total = totalQuizzes + totalAssignments;
+    int completed = completedQuizzes + completedAssignments;
     double percent = total == 0 ? 0 : completed / total;
 
     return Container(
@@ -1233,12 +1742,12 @@ class _HomePageState extends State<HomePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildProgressRow(
-                  "New Tasks Today",
-                  totalTasks - completedTasks,
+                  "Remaining Tasks",
+                  total - completed,
                   Colors.red,
                 ),
                 _buildProgressRow(
-                  "Upcoming Quiz",
+                  "Quizzes",
                   totalQuizzes - completedQuizzes,
                   Colors.orange,
                 ),
@@ -1256,7 +1765,7 @@ class _HomePageState extends State<HomePage>
                     borderRadius: BorderRadius.circular(8),
                     child: Stack(
                       children: [
-                        Container(height: 10, color: const Color(0xFF9D2BD1)),
+                        Container(height: 10, color: Colors.grey.shade300),
                         FractionallySizedBox(
                           alignment: Alignment.centerLeft,
                           widthFactor: percent,
@@ -1264,7 +1773,7 @@ class _HomePageState extends State<HomePage>
                             height: 10,
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.red, Colors.orange],
+                                colors: [Color(0xFF9D2BD1), Color(0xFF6B1B9A)],
                               ),
                             ),
                           ),

@@ -147,11 +147,51 @@ class _LoginPageState extends State<LoginPage> {
     final String email = emailController.text.trim();
     final String password = passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
+    // B-01-260313: Invalid Email Syntax validation
+    // Check if email is empty
+    if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('All fields are required'),
+          content: Text('Email address is required'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Validate email contains @ symbol
+    if (!email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please include an "@" in the email address.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Optional: Additional validation for proper email format
+    final atIndex = email.indexOf('@');
+    if (atIndex == 0 || atIndex == email.length - 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid email address (e.g., name@domain.com)'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Check if password is empty
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password is required'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
       return;

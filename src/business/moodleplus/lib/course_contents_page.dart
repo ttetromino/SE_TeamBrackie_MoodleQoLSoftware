@@ -1,16 +1,19 @@
+// lib/course_contents_page.dart
 import 'package:flutter/material.dart';
-import 'services/lms_service.dart';
+import 'services/course_service.dart';
 
 class CourseContentsPage extends StatefulWidget {
   final String courseName;
-  final String courseUrl;
-  final LMSService lmsService;
+  final String courseId;
+  final String email;
+  final VoidCallback? onActivityCompleted;
 
   const CourseContentsPage({
     super.key,
     required this.courseName,
-    required this.courseUrl,
-    required this.lmsService,
+    required this.courseId,
+    required this.email,
+    this.onActivityCompleted,
   });
 
   @override
@@ -18,8 +21,9 @@ class CourseContentsPage extends StatefulWidget {
 }
 
 class _CourseContentsPageState extends State<CourseContentsPage> {
+  final CourseService _courseService = CourseService();
   bool _loading = true;
-  CourseContents? _courseContents;
+  Map<String, dynamic>? _courseData;
   String? _errorMessage;
   final Set<String> _expandedSections = {};
 
@@ -36,20 +40,49 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     });
 
     try {
-      final contents = await widget.lmsService.getCourseContents(
-        widget.courseUrl,
+      // FIRST: Try to get from database cache
+      Map<String, dynamic> data = await _courseService.getCourseContentsFromDB(
+        widget.email,
+        widget.courseId,
       );
 
-      setState(() {
-        _courseContents = contents;
-        _loading = false;
+      // If no cached data or cache is old, sync fresh
+      if (data['sections'] == null || (data['sections'] as List).isEmpty) {
+        print('🔄 No cached data, syncing course...');
 
-        // Auto-expand first section if available
-        if (contents.sections.isNotEmpty &&
-            contents.sections.first.activities.isNotEmpty) {
-          _expandedSections.add(contents.sections.first.id);
+        // Sync this specific course
+        final syncResult = await _courseService.syncCourse(
+          email: widget.email,
+          courseId: widget.courseId,
+          courseName: widget.courseName,
+          courseUrl: '', // We don't have URL, but we can get from cache or pass empty
+          forceRefresh: true,
+        );
+
+        if (syncResult['success'] == true) {
+          // Reload from database after sync
+          data = await _courseService.getCourseContentsFromDB(
+            widget.email,
+            widget.courseId,
+          );
         }
-      });
+      }
+
+      if (mounted) {
+        setState(() {
+          _courseData = data;
+          _loading = false;
+
+          final sections = data['sections'] as List? ?? [];
+          if (sections.isNotEmpty) {
+            final firstSection = sections.first as Map;
+            final activities = firstSection['activities'] as List?;
+            if (activities != null && activities.isNotEmpty) {
+              _expandedSections.add(firstSection['id'].toString());
+            }
+          }
+        });
+      }
     } catch (e) {
       setState(() {
         _loading = false;
@@ -70,11 +103,11 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
 
   void _expandAllSections() {
     setState(() {
-      if (_courseContents != null) {
-        for (var section in _courseContents!.sections) {
-          if (section.activities.isNotEmpty) {
-            _expandedSections.add(section.id);
-          }
+      final sections = _courseData?['sections'] as List? ?? [];
+      for (var section in sections) {
+        final activities = section['activities'] as List?;
+        if (activities != null && activities.isNotEmpty) {
+          _expandedSections.add(section['id'].toString());
         }
       }
     });
@@ -84,6 +117,184 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     setState(() {
       _expandedSections.clear();
     });
+  }
+
+  // Show activity details in a dialog - NO EXTERNAL NAVIGATION
+  void _showActivityDetails(Map<String, dynamic> activity) {
+    final activityName = activity['name'] ?? 'Unnamed Activity';
+    final activityType = activity['type'] ?? 'unknown';
+    final activityStatus = activity['completionStatus'] ?? 'todo';
+    final isCompleted = activityStatus == 'done';
+    final dates = activity['dates'] as List? ?? [];
+    final description = activity['description'] ?? 'No description available';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _getActivityColor(activityType).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _getActivityIcon(activityType),
+                color: _getActivityColor(activityType),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                activityName,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Type badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getActivityColor(activityType).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                activityType.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _getActivityColor(activityType),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Status
+            Row(
+              children: [
+                Icon(
+                  isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: isCompleted ? Colors.green : Colors.orange,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isCompleted ? 'Completed' : 'Not yet completed',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isCompleted ? Colors.green : Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+
+            if (dates.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const Text(
+                'Dates',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              ...dates.map((date) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        date,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+
+            const SizedBox(height: 12),
+            const Divider(),
+            const Text(
+              'Description',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (!isCompleted)
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _markAsCompleted(activity);
+              },
+              icon: const Icon(Icons.check, size: 18),
+              label: const Text('Mark Complete'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _markAsCompleted(Map<String, dynamic> activity) async {
+    setState(() => _loading = true);
+
+    final result = await _courseService.markActivityComplete(
+      email: widget.email,
+      courseId: widget.courseId,
+      activityId: activity['id'].toString(),
+      isCompleted: true,
+    );
+
+    if (result['success'] == true) {
+      await _loadContents();
+
+      // NOTIFY BACKLOG - Call the callback to refresh backlog
+      widget.onActivityCompleted?.call();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Activity marked as complete!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to mark as complete'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    setState(() => _loading = false);
   }
 
   @override
@@ -100,10 +311,11 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               overflow: TextOverflow.ellipsis,
             ),
             if (!_loading &&
-                _courseContents != null &&
-                _courseContents!.courseTitle.isNotEmpty)
+                _courseData != null &&
+                _courseData!['courseTitle'] != null &&
+                _courseData!['courseTitle'].toString().isNotEmpty)
               Text(
-                _courseContents!.courseTitle,
+                _courseData!['courseTitle'].toString(),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.normal,
@@ -117,8 +329,8 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
         foregroundColor: Colors.white,
         actions: [
           if (!_loading &&
-              _courseContents != null &&
-              _courseContents!.sections.isNotEmpty)
+              _courseData != null &&
+              (_courseData!['sections'] as List?)?.isNotEmpty == true)
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
               onSelected: (value) {
@@ -166,12 +378,12 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
         ],
         bottom: _loading
             ? const PreferredSize(
-                preferredSize: Size.fromHeight(2),
-                child: LinearProgressIndicator(
-                  backgroundColor: Colors.white24,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
+          preferredSize: Size.fromHeight(2),
+          child: LinearProgressIndicator(
+            backgroundColor: Colors.white24,
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        )
             : null,
       ),
       body: _buildBody(),
@@ -221,7 +433,9 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
       );
     }
 
-    if (_courseContents == null || _courseContents!.sections.isEmpty) {
+    final sections = _courseData?['sections'] as List? ?? [];
+
+    if (sections.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -254,20 +468,21 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     }
 
     // Calculate statistics
-    int totalActivities = _courseContents!.sections.fold(
-      0,
-      (sum, section) => sum + section.activities.length,
-    );
-    int completedActivities = _courseContents!.sections.fold(
-      0,
-      (sum, section) =>
-          sum +
-          section.activities.where((a) => a.completionStatus == 'done').length,
-    );
+    int totalActivities = 0;
+    int completedActivities = 0;
+
+    for (var section in sections) {
+      final activities = section['activities'] as List? ?? [];
+      totalActivities += activities.length;
+      for (var activity in activities) {
+        if (activity['completionStatus'] == 'done') {
+          completedActivities++;
+        }
+      }
+    }
 
     return Column(
       children: [
-        // Statistics Header
         Container(
           padding: const EdgeInsets.all(16),
           color: Colors.grey[50],
@@ -291,20 +506,18 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               _buildStatChip(
                 icon: Icons.folder,
                 label: 'Sections',
-                value: '${_courseContents!.sections.length}',
+                value: '${sections.length}',
                 color: Colors.orange,
               ),
             ],
           ),
         ),
-
-        // Sections List
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: _courseContents!.sections.length,
+            itemCount: sections.length,
             itemBuilder: (context, index) {
-              final section = _courseContents!.sections[index];
+              final section = sections[index];
               return _buildSectionCard(section);
             },
           ),
@@ -347,16 +560,15 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     );
   }
 
-  Widget _buildSectionCard(CourseSection section) {
-    // Filter out activities with no name
-    final activities = section.activities
-        .where((a) => a.name.isNotEmpty)
-        .toList();
-    if (activities.isEmpty) return const SizedBox.shrink();
+  Widget _buildSectionCard(Map<String, dynamic> section) {
+    final activities = List<Map<String, dynamic>>.from(section['activities'] ?? []);
+    final activitiesWithName = activities.where((a) => a['name'].toString().isNotEmpty).toList();
 
-    final isExpanded = _expandedSections.contains(section.id);
-    final completedInSection = activities
-        .where((a) => a.completionStatus == 'done')
+    if (activitiesWithName.isEmpty) return const SizedBox.shrink();
+
+    final isExpanded = _expandedSections.contains(section['id'].toString());
+    final completedInSection = activitiesWithName
+        .where((a) => a['completionStatus'] == 'done')
         .length;
 
     return Card(
@@ -365,17 +577,14 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
-          // Section Header
           InkWell(
-            onTap: () => _toggleSection(section.id),
+            onTap: () => _toggleSection(section['id'].toString()),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.grey[50],
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
-                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Row(
                 children: [
@@ -388,7 +597,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                     ),
                     child: Center(
                       child: Text(
-                        section.number,
+                        section['number']?.toString() ?? '?',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF9D2BD1),
@@ -402,7 +611,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          section.name,
+                          section['name'] ?? 'Untitled Section',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
@@ -414,7 +623,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                         Row(
                           children: [
                             Text(
-                              '${activities.length} items',
+                              '${activitiesWithName.length} items',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -452,20 +661,15 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               ),
             ),
           ),
-
-          // Activities List (if expanded)
           if (isExpanded)
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
-              itemCount: activities.length,
+              itemCount: activitiesWithName.length,
               itemBuilder: (context, index) {
-                final activity = activities[index];
-                return _buildActivityTile(
-                  activity,
-                  index < activities.length - 1,
-                );
+                final activity = activitiesWithName[index];
+                return _buildActivityTile(activity, index < activitiesWithName.length - 1);
               },
             ),
         ],
@@ -473,7 +677,11 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     );
   }
 
-  Widget _buildActivityTile(CourseActivity activity, bool showDivider) {
+  Widget _buildActivityTile(Map<String, dynamic> activity, bool showDivider) {
+    final activityName = activity['name']?.toString() ?? 'Unnamed Activity';
+    final activityType = activity['type']?.toString() ?? 'unknown';
+    final isCompleted = activity['completionStatus'] == 'done';
+
     return Container(
       margin: const EdgeInsets.only(left: 16, right: 16),
       child: Column(
@@ -483,15 +691,12 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
             leading: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _getActivityColor(
-                  activity.type,
-                  activity.badge,
-                ).withOpacity(0.1),
+                color: _getActivityColor(activityType).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                _getActivityIcon(activity.type, activity.badge),
-                color: _getActivityColor(activity.type, activity.badge),
+                _getActivityIcon(activityType),
+                color: _getActivityColor(activityType),
                 size: 20,
               ),
             ),
@@ -499,32 +704,26 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
               children: [
                 Expanded(
                   child: Text(
-                    activity.name,
+                    activityName,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                if (activity.badge != null)
+                if (activity['badge'] != null && activity['badge'].toString().isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: _getActivityColor(
-                        activity.type,
-                        activity.badge,
-                      ).withOpacity(0.1),
+                      color: _getActivityColor(activityType).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      activity.badge!,
+                      activity['badge'].toString(),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: _getActivityColor(activity.type, activity.badge),
+                        color: _getActivityColor(activityType),
                       ),
                     ),
                   ),
@@ -536,60 +735,41 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
                 Row(
                   children: [
                     Text(
-                      activity.type.toUpperCase(),
+                      activityType.toUpperCase(),
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
-                    if (activity.isIndented) ...[
+                    if (activity['isIndented'] == true) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                         decoration: BoxDecoration(
                           color: Colors.grey[200],
                           borderRadius: BorderRadius.circular(2),
                         ),
                         child: const Text(
                           'INDENTED',
-                          style: TextStyle(
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
                   ],
                 ),
-                if (activity.dates.isNotEmpty)
-                  ...activity.dates.map(
-                    (date) => Padding(
+                if (activity['dates'] != null && (activity['dates'] as List).isNotEmpty)
+                  ...(activity['dates'] as List).take(1).map(
+                        (date) => Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        date,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.orange,
-                        ),
+                        date.toString(),
+                        style: const TextStyle(fontSize: 11, color: Colors.orange),
                       ),
                     ),
                   ),
               ],
             ),
-            trailing: _buildCompletionIndicator(activity.completionStatus),
-            onTap: activity.url != null
-                ? () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Opening ${activity.type}...'),
-                        duration: const Duration(seconds: 1),
-                        backgroundColor: const Color(0xFF9D2BD1),
-                      ),
-                    );
-                    // Here you can add navigation to open the activity URL
-                    // You might want to open it in a WebView or browser
-                  }
-                : null,
+            trailing: isCompleted
+                ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                : const Icon(Icons.radio_button_unchecked, color: Colors.orange, size: 20),
+            onTap: () => _showActivityDetails(activity),
           ),
           if (showDivider) const Divider(indent: 56),
         ],
@@ -597,45 +777,13 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     );
   }
 
-  Widget _buildCompletionIndicator(String status) {
-    switch (status) {
-      case 'done':
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
-        );
-      case 'todo':
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.radio_button_unchecked,
-            color: Colors.orange,
-            size: 20,
-          ),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  IconData _getActivityIcon(String type, String? badge) {
+  IconData _getActivityIcon(String type) {
     switch (type) {
       case 'forum':
         return Icons.forum;
       case 'assign':
         return Icons.assignment;
       case 'resource':
-        if (badge?.toLowerCase() == 'pdf') return Icons.picture_as_pdf;
-        if (badge?.toLowerCase() == 'html') return Icons.html;
-        if (badge?.toLowerCase() == 'video') return Icons.video_library;
         return Icons.insert_drive_file;
       case 'quiz':
         return Icons.quiz;
@@ -652,16 +800,13 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     }
   }
 
-  Color _getActivityColor(String type, String? badge) {
+  Color _getActivityColor(String type) {
     switch (type) {
       case 'forum':
         return Colors.blue;
       case 'assign':
         return Colors.green;
       case 'resource':
-        if (badge?.toLowerCase() == 'pdf') return Colors.red;
-        if (badge?.toLowerCase() == 'html') return Colors.orange;
-        if (badge?.toLowerCase() == 'video') return Colors.purple;
         return Colors.purple;
       case 'quiz':
         return Colors.amber;

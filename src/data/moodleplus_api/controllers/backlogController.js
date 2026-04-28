@@ -7,10 +7,12 @@ const cheerio = require('cheerio');
 
 // Parse due date from activity text
 const parseDueDate = (text) => {
+  if (!text) return null;
+
   const patterns = [
-    { regex: /Due:\s*(\d{1,2}\s+\w+\s+\d{4},\s*\d{1,2}:\d{2}\s*(?:AM|PM))/, format: 'MMMM D, YYYY, h:mm A' },
-    { regex: /Due:\s*(\d{1,2}\/\d{1,2}\/\d{4})/, format: 'MM/DD/YYYY' },
-    { regex: /(\d{1,2}\s+\w+\s+\d{4})/, format: 'D MMMM YYYY' },
+    { regex: /Due:\s*(\w+,\s*\d{1,2}\s+\w+\s+\d{4},\s*\d{1,2}:\d{2}\s*(?:AM|PM))/, parse: (d) => new Date(d) },
+    { regex: /Due:\s*(\d{1,2}\/\d{1,2}\/\d{4})/, parse: (d) => new Date(d) },
+    { regex: /(\d{1,2}\s+\w+\s+\d{4})/, parse: (d) => new Date(d) }
   ];
   
   for (const pattern of patterns) {
@@ -114,11 +116,11 @@ const syncBacklog = async (req, res) => {
         // Find activities with due dates
         $('li.activity').each((i, activity) => {
           const activityElement = $(activity);
-          
+
           const activityLink = activityElement.find('.activityname a');
           const activityName = activityLink.text().trim();
           const activityHref = activityLink.attr('href');
-          
+
           const activityClasses = activityElement.attr('class')?.split(' ') || [];
           let activityType = 'unknown';
           for (const cls of activityClasses) {
@@ -127,26 +129,43 @@ const syncBacklog = async (req, res) => {
               break;
             }
           }
-          
-          // Skip non-assignment types
-          if (!['assign', 'quiz', 'forum'].includes(activityType)) return;
-          
+
+          // FIX: Get activity ID properly
+          let activityId = activityElement.attr('data-id');
+          if (!activityId) {
+            // Try to get from URL
+            if (activityHref) {
+              const idMatch = activityHref.match(/id=(\d+)/);
+              if (idMatch) {
+                activityId = idMatch[1];
+              }
+            }
+          }
+          if (!activityId) {
+            // Generate fallback ID
+            activityId = `${course.id}_${i}`;
+          }
+
+          // Skip if no activity name
+          if (!activityName) return;
+
           // Extract due date
           let dueDate = null;
           let dateText = '';
-          
+
           activityElement.find('[data-region="activity-dates"] div').each((j, dateEl) => {
             const text = $(dateEl).text().trim();
             dateText += text;
           });
-          
+
           const dueDateMatch = dateText.match(/Due:\s*(.+?)(?:\s*\||$)/i);
           if (dueDateMatch) {
             dueDate = parseDueDate(dueDateMatch[1]);
           }
-          
+
+          // If no due date, skip (only include items with deadlines)
           if (!dueDate) return;
-          
+
           // Check completion status
           const completionButton = activityElement.find('.completion-dropdown button');
           let isCompleted = false;
@@ -154,17 +173,17 @@ const syncBacklog = async (req, res) => {
             const buttonText = completionButton.text().trim();
             isCompleted = buttonText.includes('Done');
           }
-          
+
           const priority = calculatePriority(dueDate);
           const sectionElement = activityElement.closest('.section');
           const sectionName = sectionElement.find('.sectionname').text().trim();
-          
+
           backlogItems.push({
             userId: email,
             courseId: course.id,
             courseName: course.name,
             courseCode: courseCode,
-            activityId: `${course.id}_${i}`,
+            activityId: activityId,  // Now properly defined
             activityName: activityName,
             activityType: activityType,
             dueDate: dueDate,
@@ -205,27 +224,28 @@ const getBacklogItems = async (req, res) => {
     const { email } = req.params;
     const { filterBy, priority, courseCode, showPinnedOnly } = req.query;
     
-    let query = { userId: email, isCompleted: false };
-    
+    // ONLY get items that are NOT completed (isCompleted: false)
+    let query = { userId: email, isCompleted: false };  // Add this filter
+
     // US-13-T-02: Apply filters
     if (filterBy === 'deadline') {
       query.dueDate = { $exists: true, $ne: null };
     }
-    
+
     if (priority && priority !== 'all') {
       query.priority = priority;
     }
-    
+
     if (courseCode && courseCode !== 'all') {
       query.courseCode = courseCode;
     }
-    
+
     if (showPinnedOnly === 'true') {
       query.isPinned = true;
     }
-    
+
     let items = await BacklogItem.find(query).sort({ dueDate: 1, priority: 1 });
-    
+
     // Custom sorting for deadline filter
     if (filterBy === 'deadline') {
       items = items.sort((a, b) => {
@@ -234,10 +254,10 @@ const getBacklogItems = async (req, res) => {
         return a.dueDate - b.dueDate;
       });
     }
-    
+
     // Get unique course codes for filter
     const courseCodes = await BacklogItem.distinct('courseCode', { userId: email });
-    
+
     res.json({
       success: true,
       items: items,
@@ -246,7 +266,7 @@ const getBacklogItems = async (req, res) => {
         priorities: ['urgent', 'high', 'medium', 'low', 'no_deadline']
       }
     });
-    
+
   } catch (err) {
     console.error('Get backlog items error:', err);
     res.status(500).json({ error: err.message });
@@ -292,9 +312,80 @@ const completeItem = async (req, res) => {
     item.isCompleted = true;
     await item.save();
     
+    // ALSO update the activity completion status in the User's course data
+    const User = require('../models/User');
+    const user = await User.findOne({ email });
+
+    if (user) {
+      const course = user.courses.find(c => c.courseId === item.courseId);
+      if (course) {
+        // Find the activity and mark it as done
+        for (const section of course.sections) {
+          const activity = section.activities.find(a => a.id === item.activityId);
+          if (activity) {
+            activity.completionStatus = 'done';
+            activity.lastSynced = new Date();
+            break;
+          }
+        }
+
+        // Recalculate course stats
+        let totalActivities = 0;
+        let completedActivities = 0;
+        let totalTasks = 0, completedTasks = 0;
+        let totalQuizzes = 0, completedQuizzes = 0;
+        let totalAssignments = 0, completedAssignments = 0;
+
+        const EXCLUDED_COURSES = ['B-Library', 'B-LIBRARY', 'Library'];
+
+        for (const c of user.courses) {
+          if (c.isArchived) continue;
+
+          const isExcluded = EXCLUDED_COURSES.some(excluded =>
+            c.courseName.toLowerCase().includes(excluded.toLowerCase())
+          );
+          if (isExcluded) continue;
+
+          for (const s of c.sections) {
+            for (const a of s.activities) {
+              totalActivities++;
+              if (a.completionStatus === 'done') completedActivities++;
+
+              const isDone = a.completionStatus === 'done';
+              switch (a.type) {
+                case 'assign':
+                  totalAssignments++;
+                  if (isDone) completedAssignments++;
+                  break;
+                case 'quiz':
+                  totalQuizzes++;
+                  if (isDone) completedQuizzes++;
+                  break;
+                default:
+                  if (a.type !== 'forum' && a.type !== 'resource' && a.type !== 'url') {
+                    totalTasks++;
+                    if (isDone) completedTasks++;
+                  }
+              }
+            }
+          }
+        }
+
+        user.courseStats = {
+          totalTasks, completedTasks,
+          totalQuizzes, completedQuizzes,
+          totalAssignments, completedAssignments,
+          lastUpdated: new Date()
+        };
+
+        await user.save();
+      }
+    }
+
     res.json({
       success: true,
-      message: 'Task marked as completed'
+      message: 'Task marked as completed',
+      stats: user?.courseStats || {}
     });
     
   } catch (err) {
@@ -338,11 +429,69 @@ const getLayoutPreference = async (req, res) => {
   }
 };
 
+const completeItemByActivity = async (req, res) => {
+  try {
+    const { email, courseId, activityId } = req.body;
+
+    console.log(`📝 Marking backlog item complete for: ${email}, course: ${courseId}, activity: ${activityId}`);
+
+    const item = await BacklogItem.findOne({
+      userId: email,
+      courseId: courseId,
+      activityId: activityId,
+      isCompleted: false
+    });
+
+    if (!item) {
+      // Item might already be completed or not found
+      return res.json({ success: true, message: 'Item already completed or not found' });
+    }
+
+    item.isCompleted = true;
+    await item.save();
+
+    console.log(`✅ Backlog item marked complete: ${item.activityName}`);
+
+    res.json({
+      success: true,
+      message: 'Backlog item marked as completed',
+      itemId: item._id
+    });
+
+  } catch (err) {
+    console.error('Complete item by activity error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+const getBacklogItem = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { email } = req.query;
+
+    console.log(`🔍 Looking for backlog item: ${itemId} for user: ${email}`);
+
+    const item = await BacklogItem.findOne({ _id: itemId, userId: email });
+    if (!item) {
+      console.log(`❌ Backlog item not found: ${itemId}`);
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    console.log(`✅ Found backlog item: ${item.activityName}`);
+    res.json({ success: true, item: item });
+
+  } catch (err) {
+    console.error('Get backlog item error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
 module.exports = {
   syncBacklog,
   getBacklogItems,
+  getBacklogItem,
   togglePin,
   completeItem,
+  completeItemByActivity,
   saveLayoutPreference,
   getLayoutPreference
 };
