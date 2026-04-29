@@ -69,6 +69,13 @@ const {
   completeItemByActivity
 } = require('./controllers/backlogController');
 
+const {
+  getPendingNotifications,
+  markNotificationSent,
+  saveNotificationPreference,
+  getNotificationPreference
+} = require('./controllers/notificationController');
+
 const app = express();
 app.use(express.json());
 
@@ -139,6 +146,10 @@ app.post('/api/course/sync', syncCourseToDatabase);
 app.post('/api/course/sync-all', syncAllCourses);
 app.post('/api/course/sync-by-id', syncCourseById);
 app.put('/api/course/activity-complete-by-url', updateActivityByUrl);
+app.get('/api/notifications/pending/:email', getPendingNotifications);
+app.post('/api/notifications/mark-sent', markNotificationSent);
+app.get('/api/notifications/preference/:email', getNotificationPreference);
+app.post('/api/notifications/preference', saveNotificationPreference);
 
 // Test route
 app.get('/', (req, res) => {
