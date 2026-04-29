@@ -845,28 +845,11 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MoodlePlus Home'),
+        title: const Text('Moodle+'),
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // TEST NOTIFICATION BUTTON (ADD THIS FIRST)
-          IconButton(
-            icon: const Icon(Icons.notifications_active, color: Colors.orange, size: 28),
-            onPressed: () {
-              // Show in-app toast notification
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('📅 TEST: Assignment due in 24 hours!'),
-                  backgroundColor: Color(0xFF9D2BD1),
-                  duration: Duration(seconds: 4),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              print('✅ Test notification triggered!');
-            },
-            tooltip: 'Test Notification',
-          ),
-          // Sync/Update button (KEEP ONLY ONE)
+          // Sync/Update button
           IconButton(
             icon: _isSyncing
                 ? const SizedBox(
@@ -926,7 +909,6 @@ class _HomePageState extends State<HomePage>
             onPressed: _showLogoutConfirmation,
             tooltip: 'Logout',
           ),
-          // REMOVED THE DUPLICATE SYNC BUTTON HERE
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
