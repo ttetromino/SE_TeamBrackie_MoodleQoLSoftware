@@ -15,7 +15,7 @@ import 'gradebook_page.dart';
 import 'calendar_page.dart';
 import 'services/course_service.dart';
 import 'package:http/http.dart' as http;
-
+import 'services/notification_service.dart';
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
 
@@ -31,6 +31,9 @@ class _HomePageState extends State<HomePage>
   late LMSService _lmsService;
   late ArchiveService _archiveService;
   late CourseService _courseService;
+
+  final NotificationService _notificationService = NotificationService();
+  bool _notificationsEnabled = true;
 
   List<ArchivedCourse> _archivedCourses = [];
 
@@ -58,6 +61,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
+    _initNotifications();
     _courseService = CourseService();
     _tabController = TabController(length: 5, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
@@ -68,6 +72,45 @@ class _HomePageState extends State<HomePage>
       _loadArchivedCourses();
     });
     _checkBiometricStatus();
+  }
+
+  Future<void> _initNotifications() async {
+    await _notificationService.initialize();
+
+    // Set deep linking callback
+    _notificationService.onNotificationTap = (courseId, activityId, activityUrl) {
+      _navigateToTask(courseId, activityId, activityUrl);
+    };
+
+    // Load preferences and start polling
+    final prefs = await _notificationService.getPreferences(widget.user['email']);
+    _notificationsEnabled = prefs['enabled24h'] ?? true;
+
+    if (_notificationsEnabled) {
+      _notificationService.startPolling(widget.user['email']);
+    }
+  }
+
+  void _navigateToTask(String courseId, String activityId, String activityUrl) {
+    // Navigate to the specific task/course
+    // Find course by ID and navigate to its contents
+    final course = _courses.firstWhere(
+          (c) => c.id == courseId,
+      orElse: () => LmsCourse(id: '', name: '', link: ''),
+    );
+
+    if (course.id.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CourseContentsPage(
+            courseName: course.name,
+            courseId: course.id,
+            email: widget.user['email'],
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _manualSyncCourses() async {
@@ -592,6 +635,7 @@ class _HomePageState extends State<HomePage>
             ),
           ],
         ),
+
         actions: [
           TextButton(
             onPressed: () {
@@ -651,6 +695,7 @@ class _HomePageState extends State<HomePage>
             child: const Text('Login to LMS'),
           ),
         ],
+
       ),
     );
   }
@@ -804,7 +849,24 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
-          // Sync/Update button
+          // TEST NOTIFICATION BUTTON (ADD THIS FIRST)
+          IconButton(
+            icon: const Icon(Icons.notifications_active, color: Colors.orange, size: 28),
+            onPressed: () {
+              // Show in-app toast notification
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('📅 TEST: Assignment due in 24 hours!'),
+                  backgroundColor: Color(0xFF9D2BD1),
+                  duration: Duration(seconds: 4),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+              print('✅ Test notification triggered!');
+            },
+            tooltip: 'Test Notification',
+          ),
+          // Sync/Update button (KEEP ONLY ONE)
           IconButton(
             icon: _isSyncing
                 ? const SizedBox(
@@ -864,11 +926,7 @@ class _HomePageState extends State<HomePage>
             onPressed: _showLogoutConfirmation,
             tooltip: 'Logout',
           ),
-          IconButton(
-            icon: const Icon(Icons.cloud_sync),
-            onPressed: _manualSyncCourses,
-            tooltip: 'Sync all courses (first time only)',
-          ),
+          // REMOVED THE DUPLICATE SYNC BUTTON HERE
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
@@ -1801,6 +1859,78 @@ class _HomePageState extends State<HomePage>
           ),
           Text(title),
         ],
+      ),
+    );
+  }
+  Widget _buildNotificationSettingsSection() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9D2BD1).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.notifications_active, size: 20, color: Color(0xFF9D2BD1)),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Notification Settings',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              title: const Text('24-hour reminders'),
+              subtitle: const Text('Get notified 24 hours before deadline'),
+              value: _notificationsEnabled,
+              onChanged: (value) async {
+                setState(() => _notificationsEnabled = value);
+                await _notificationService.savePreferences(
+                  widget.user['email'],
+                  value,
+                  true, // Keep 3-hour as true for now
+                );
+                if (value) {
+                  _notificationService.startPolling(widget.user['email']);
+                } else {
+                  _notificationService.stopPolling();
+                }
+              },
+              activeColor: const Color(0xFF9D2BD1),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Notifications will appear even when the app is closed. '
+                          'Tap a notification to go directly to the task.',
+                      style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
