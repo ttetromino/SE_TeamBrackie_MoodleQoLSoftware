@@ -13,7 +13,7 @@ dependencies:
   #webview_flutter: ^4.4.0
   # US-03: Add image_picker for profile picture
   image_picker: ^1.0.5
-
+  flutter_local_notifications: ^17.0.0
   local_auth: ^2.1.7
   shared_preferences: ^2.2.2
   http: ^1.1.0
