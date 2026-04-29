@@ -20,7 +20,9 @@ const backlogItemSchema = new mongoose.Schema({
   sectionName: { type: String, default: '' },
   activityUrl: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  isNotified24h: { type: Boolean, default: false },
+  isNotified3h: { type: Boolean, default: false }
 });
 
 backlogItemSchema.index({ userId: 1, dueDate: 1 });
