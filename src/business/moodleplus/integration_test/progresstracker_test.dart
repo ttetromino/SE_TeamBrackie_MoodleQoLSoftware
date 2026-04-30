@@ -131,34 +131,122 @@ void main() {
   group('MoodlePlus - Progress Tracker Integration Tests', () {
 
     testWidgets('TC35 - Progress: Happy Path (Task Completion)', (tester) async {
-      await login(tester, 'wilmartest1@gmail.com', '123');
+      await login(tester, 'wilmartest2@gmail.com', '123');
       await ensureLmsConnectedAndLoaded(tester, 'wilmarUPHSL_020505');
 
+      // 1. Memorize the starting percentage and counts
       String initialPercentage = getCurrentPercentage(tester);
       debugPrint('📊 Starting Percentage: $initialPercentage');
 
+      // 2. Navigate to Backlog
       await safeTabNavigate(tester, 'Backlog');
 
-      final uncheckedBoxes = find.byWidgetPredicate((widget) => widget is Checkbox && widget.value == false);
-      if (uncheckedBoxes.evaluate().isNotEmpty) {
-        debugPrint('✅ Found an unchecked task. Tapping it...');
-        await tester.tap(uncheckedBoxes.first);
+      // 3. Repeat 5 times: Select task -> Pop up -> Mark as complete
+      for (int i = 0; i < 5; i++) {
+        // Wait for any lingering backend loading overlays to vanish
+        await tester.pumpAndSettle(const Duration(seconds: 3));
+
+        final tasks = find.byType(Card);
+
+        if (tasks
+            .evaluate()
+            .isEmpty) {
+          debugPrint('⚠️ Ran out of tasks! Completed $i out of 5.');
+          break;
+        }
+
+        // If tasks disappear when completed, the list shrinks. This prevents an out-of-bounds error.
+        final targetTask = tasks
+            .evaluate()
+            .length > i ? tasks.at(i) : tasks.first;
+
+        debugPrint('✅ Opening task ${i + 1}...');
+        await tester.ensureVisible(targetTask);
+        await tester.pumpAndSettle();
+
+        // warnIfMissed is false to prevent crashes if a tiny pixel is still animating
+        await tester.tap(targetTask, warnIfMissed: false);
         await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        final completeBtn = find.textContaining(
+            RegExp(r'mark as complete|complete', caseSensitive: false));
+
+        if (completeBtn
+            .evaluate()
+            .isNotEmpty) {
+          debugPrint('🎯 Clicking "Mark as Complete"...');
+          await tester.tap(completeBtn.last, warnIfMissed: false);
+
+          // Wait for any CircularProgressIndicators to disappear
+          debugPrint('⏳ Waiting for backend to refresh...');
+          for (int w = 0; w < 20; w++) {
+            await tester.pump(const Duration(milliseconds: 500));
+            if (find
+                .byType(CircularProgressIndicator)
+                .evaluate()
+                .isEmpty) break;
+          }
+          await tester.pumpAndSettle(const Duration(seconds: 1));
+
+          // THE NEW FIX: Look for the SECOND pop-up (Confirmation/Success Dialog)
+          debugPrint('🔎 Looking for second confirmation pop-up...');
+
+          // Look for common confirmation button texts (adjust these if your app uses different words!)
+          final confirmBtn = find.textContaining(RegExp(
+              r'^confirm$|^complete$|^close$|^got it$|^continue$',
+              caseSensitive: false));
+
+          if (confirmBtn
+              .evaluate()
+              .isNotEmpty) {
+            debugPrint('👋 Clicking "${tester
+                .widget<Text>(confirmBtn.last)
+                .data}" to close second pop-up...');
+            await tester.tap(confirmBtn.last, warnIfMissed: false);
+            await tester.pumpAndSettle(const Duration(seconds: 1));
+          } else {
+            // Fallback: If no button is found, try tapping an 'X' icon or tapping outside the box
+            debugPrint(
+                '⚠️ No confirmation button found. Attempting fallback dismiss...');
+            final closeIcon = find.byIcon(Icons.close);
+            if (closeIcon
+                .evaluate()
+                .isNotEmpty) {
+              await tester.tap(closeIcon.first, warnIfMissed: false);
+            } else {
+              await tester.tapAt(const Offset(10, 50));
+            }
+            await tester.pumpAndSettle(const Duration(seconds: 1));
+          }
+        } else {
+          debugPrint(
+              '❌ "Mark as complete" button not found. Dismissing dialog.');
+          await tester.tapAt(const Offset(10, 50));
+          await tester.pumpAndSettle(const Duration(seconds: 1));
+        }
       }
 
+      // One final wait to guarantee the screen is completely interactive
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      // 4. Navigate back to My Courses
+      debugPrint('🔙 Navigating back to My Courses...');
       await safeTabNavigate(tester, 'My Courses');
 
+      // 5. Wait for the percentage to change
       debugPrint('⏳ Waiting for UI to sync new percentage...');
       await waitForPercentageChange(tester, initialPercentage);
 
+      // 6. Verify the UI updated
       String newPercentage = getCurrentPercentage(tester);
       debugPrint('📈 New Percentage: $newPercentage');
 
-      expect(newPercentage, isNot(equals(initialPercentage)), reason: 'The percentage did not update after completing a task!');
+      expect(newPercentage, isNot(equals(initialPercentage)), reason: 'The percentage did not update after completing tasks!');
       expect(newPercentage, isNot(equals("Not Found")), reason: 'Could not find the percentage text on the screen.');
 
       debugPrint('✅ TC35 PASSED');
     });
+
 
     testWidgets('TC36 - Progress: Integer Display (Rounded)', (tester) async {
       await login(tester, 'wilmartest1@gmail.com', '123');
