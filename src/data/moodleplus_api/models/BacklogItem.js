@@ -1,4 +1,3 @@
-// models/BacklogItem.js
 const mongoose = require('mongoose');
 
 const backlogItemSchema = new mongoose.Schema({
@@ -9,10 +8,10 @@ const backlogItemSchema = new mongoose.Schema({
   activityId: { type: String, required: true },
   activityName: { type: String, required: true },
   activityType: { type: String, required: true },
-  dueDate: { type: Date, required: true },
+  dueDate: { type: Date, required: false, default: null },  // CHANGED: required: false
   priority: { 
     type: String, 
-    enum: ['urgent', 'high', 'medium', 'low', 'no_deadline'],
+    enum: ['urgent', 'high', 'medium', 'low', 'no_deadline', 'past_due'],
     default: 'medium'
   },
   isPinned: { type: Boolean, default: false },

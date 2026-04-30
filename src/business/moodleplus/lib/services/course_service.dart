@@ -89,6 +89,26 @@ class CourseService {
     }
   }
 
+  // NEW: Sync backlog after completing an activity
+  Future<void> syncBacklogAfterCompletion(String email) async {
+    try {
+      print('🔄 Syncing backlog after activity completion...');
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/backlog/sync'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('✅ Backlog synced successfully, ${data['count']} items updated');
+      } else {
+        print('⚠️ Backlog sync returned: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Backlog sync error: $e');
+    }
+  }
+
   // Mark activity complete by ID (used by Course Contents page)
   Future<Map<String, dynamic>> markActivityComplete({
     required String email,

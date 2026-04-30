@@ -4,49 +4,85 @@ const { createLMSClient, ensureValidSession } = require('../utils/lmsClient');
 const { userSessions } = require('../utils/sessionStore');
 const cheerio = require('cheerio');
 
-// Add this constant at the top of the file
-const EXCLUDED_COURSES = ['B-Library', 'B-LIBRARY', 'Library', 'Binan - College E-library'];
+// EXCLUDED COURSES (same as backlog)
+const EXCLUDED_COURSES = [
+  'B-Library', 'B-LIBRARY', 'Library', 'Binan - College E-library',
+  'orientation', 'Orientation'
+];
+
+// EXCLUDED ACTIVITY KEYWORDS (same as backlog)
+const EXCLUDED_ACTIVITY_KEYWORDS = [
+  'recitation', 'discussion', 'forum', 'participation',
+  'attendance', 'feedback', 'survey', 'poll', 'evaluation',
+  'seatwork', 'activity', 'handout', 'resource', 'hands-on',
+  'assignment #', 'assignment no', 'pre-assignment', 'preassignment',
+  'pre-act', 'preact', 'mid-act', 'midact', 'mid-assignment',
+  'f-assignment', 'f-sw', 'prelim act', 'task', 'exercise',
+  'group presentation', 'groupwork', 'group work'
+];
+
+// Helper function to check if activity should be counted (SAME AS BACKLOG)
+function shouldCountForStats(activityName, activityType) {
+  if (!activityName) return false;
+
+  const lowerName = activityName.toLowerCase();
+
+  // Always count exams
+  const isExam = ['exam', 'prelim', 'midterm', 'final', 'project'].some(keyword =>
+    lowerName.includes(keyword) && !lowerName.includes('group')
+  );
+  if (isExam) return true;
+
+  // Check for excluded keywords
+  for (const keyword of EXCLUDED_ACTIVITY_KEYWORDS) {
+    if (lowerName.includes(keyword)) {
+      return false;
+    }
+  }
+
+  // Only count assignments and quizzes
+  return activityType === 'assign' || activityType === 'quiz';
+}
 
 // Parse due date from text
 const parseDueDate = (dateText) => {
   if (!dateText) return null;
-
   const patterns = [
     { regex: /Due:\s*(\w+,\s*\d{1,2}\s+\w+\s+\d{4},\s*\d{1,2}:\d{2}\s*(?:AM|PM))/, parse: (d) => new Date(d) },
     { regex: /Due:\s*(\d{1,2}\/\d{1,2}\/\d{4})/, parse: (d) => new Date(d) },
-    { regex: /Closed:\s*(\w+,\s*\d{1,2}\s+\w+\s+\d{4},\s*\d{1,2}:\d{2}\s*(?:AM|PM))/, parse: (d) => new Date(d) }
+    { regex: /(\d{1,2}\s+\w+\s+\d{4})/, parse: (d) => new Date(d) }
   ];
-
   for (const pattern of patterns) {
     const match = dateText.match(pattern.regex);
     if (match) {
-      const parsed = pattern.parse(match[1]);
-      if (!isNaN(parsed.getTime())) return parsed;
+      try {
+        const date = new Date(match[1]);
+        if (!isNaN(date.getTime())) return date;
+      } catch (e) {}
     }
   }
   return null;
 };
 
-// Helper function to calculate stats (reusable)
+// Helper function to calculate stats (SAME FILTERING AS BACKLOG)
 const calculateStats = (courses) => {
-  let totalTasks = 0, completedTasks = 0;
   let totalQuizzes = 0, completedQuizzes = 0;
   let totalAssignments = 0, completedAssignments = 0;
 
   for (const c of courses) {
-    // Skip archived courses
     if (c.isArchived) continue;
 
-    // Check if course should be excluded from progress tracker
-    const isExcluded = EXCLUDED_COURSES.some(excluded =>
+    // Skip excluded courses
+    const isExcludedCourse = EXCLUDED_COURSES.some(excluded =>
       c.courseName.toLowerCase().includes(excluded.toLowerCase())
     );
-    if (isExcluded) {
-      continue;
-    }
+    if (isExcludedCourse) continue;
 
     for (const s of c.sections) {
       for (const a of s.activities) {
+        // USE shouldCountForStats (correct function name) NOT shouldIncludeActivity
+        if (!shouldCountForStats(a.name, a.type)) continue;
+
         const isDone = a.completionStatus === 'done';
         switch (a.type) {
           case 'assign':
@@ -57,21 +93,18 @@ const calculateStats = (courses) => {
             totalQuizzes++;
             if (isDone) completedQuizzes++;
             break;
-          default:
-            // Only count actual learning activities, not forum posts or resources
-            if (a.type !== 'forum' && a.type !== 'resource' && a.type !== 'url') {
-              totalTasks++;
-              if (isDone) completedTasks++;
-            }
         }
       }
     }
   }
 
   return {
-    totalTasks, completedTasks,
-    totalQuizzes, completedQuizzes,
-    totalAssignments, completedAssignments
+    totalTasks: 0,
+    completedTasks: 0,
+    totalQuizzes,
+    completedQuizzes,
+    totalAssignments,
+    completedAssignments
   };
 };
 
@@ -79,27 +112,27 @@ const calculateStats = (courses) => {
 const getStoredCourses = async (req, res) => {
   try {
     const { email } = req.params;
-
-    const user = await User.findOne({ email }).select('courses courseStats');
+    let user = await User.findOne({ email }).select('courses courseStats');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Filter out archived courses
-    const activeCourses = user.courses.filter(c => !c.isArchived);
-
-    console.log(`📦 Returning ${activeCourses.length} cached courses for ${email}`);
-
-    res.json({
-      success: true,
-      courses: activeCourses,
-      stats: user.courseStats || {
-        totalTasks: 0, completedTasks: 0,
-        totalQuizzes: 0, completedQuizzes: 0,
-        totalAssignments: 0, completedAssignments: 0,
-        lastUpdated: null
-      },
-      fromCache: true
+    // Filter out archived and excluded courses
+    const activeCourses = user.courses.filter(c => {
+      if (c.isArchived) return false;
+      const isExcluded = EXCLUDED_COURSES.some(excluded =>
+        c.courseName.toLowerCase().includes(excluded.toLowerCase())
+      );
+      return !isExcluded;
     });
 
+    // Recalculate stats using same filtering
+    const freshStats = calculateStats(user.courses);
+    user.courseStats = freshStats;
+    await user.save();
+
+    console.log(`📦 Returning ${activeCourses.length} courses for ${email}`);
+    console.log(`📊 Stats - Quizzes: ${freshStats.completedQuizzes}/${freshStats.totalQuizzes}, Assignments: ${freshStats.completedAssignments}/${freshStats.totalAssignments}`);
+
+    res.json({ success: true, courses: activeCourses, stats: freshStats, fromCache: true });
   } catch (error) {
     console.error('Get stored courses error:', error);
     res.status(500).json({ error: error.message });
@@ -110,15 +143,11 @@ const getStoredCourses = async (req, res) => {
 const getStoredCourse = async (req, res) => {
   try {
     const { email, courseId } = req.params;
-
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
-
     const course = user.courses.find(c => c.courseId === courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
-
     res.json({ success: true, course: course, fromCache: true });
-
   } catch (error) {
     console.error('Get stored course error:', error);
     res.status(500).json({ error: error.message });
@@ -129,35 +158,23 @@ const getStoredCourse = async (req, res) => {
 const getCourseContentsFromDB = async (req, res) => {
   try {
     const { email, courseId } = req.params;
-
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
-
     const course = user.courses.find(c => c.courseId === courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
-
-    res.json({
-      success: true,
-      courseTitle: course.courseTitle,
-      sections: course.sections,
-      totalActivities: course.totalActivities,
-      completedActivities: course.completedActivities,
-      fromCache: true
-    });
-
+    res.json({ success: true, courseTitle: course.courseTitle, sections: course.sections, totalActivities: course.totalActivities, completedActivities: course.completedActivities, fromCache: true });
   } catch (error) {
     console.error('Get course contents error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
+// Sync course to database
 const syncCourseToDatabase = async (req, res) => {
   try {
     const { email, courseId, courseName, courseUrl, forceRefresh = false } = req.body;
-
     console.log(`🔄 Syncing course: ${courseName} for ${email}`);
 
-    // Get session
     let session = userSessions.get(email);
     if (!session) {
       const user = await User.findOne({ email });
@@ -170,12 +187,9 @@ const syncCourseToDatabase = async (req, res) => {
     }
 
     const client = createLMSClient(session.cookies);
-
-    // Get user once
     let user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Check if we have recent cached data
     const existingCourse = user.courses.find(c => c.courseId === courseId);
     if (existingCourse && !forceRefresh) {
       const hoursSinceSync = (Date.now() - new Date(existingCourse.lastSynced).getTime()) / (1000 * 60 * 60);
@@ -185,20 +199,15 @@ const syncCourseToDatabase = async (req, res) => {
       }
     }
 
-    // Ensure valid session
     const sessionValid = await ensureValidSession(email, client, user);
-    if (!sessionValid) {
-      return res.status(401).json({ error: 'LMS session expired. Please login again.' });
-    }
+    if (!sessionValid) return res.status(401).json({ error: 'LMS session expired' });
 
     const url = courseUrl.startsWith('http') ? courseUrl : `https://uphslms.com${courseUrl}`;
     const response = await client.get(url);
     const $ = cheerio.load(response.data);
-
     const courseTitle = $('h1').first().text().trim();
     const sections = [];
-    let totalActivities = 0;
-    let completedActivities = 0;
+    let totalActivities = 0, completedActivities = 0;
 
     $('li.section.course-section.main').each((sectionIndex, section) => {
       const sectionElement = $(section);
@@ -206,17 +215,14 @@ const syncCourseToDatabase = async (req, res) => {
       const sectionName = sectionHeader.text().trim();
       const sectionId = sectionElement.attr('data-sectionid');
       const sectionNumber = sectionElement.attr('data-number');
-
       if (!sectionName) return;
 
       const activities = [];
-
       sectionElement.find('li.activity').each((activityIndex, activity) => {
         const activityElement = $(activity);
         const activityLink = activityElement.find('.activityname a');
         const activityName = activityLink.text().trim();
         const activityHref = activityLink.attr('href');
-
         const activityClasses = activityElement.attr('class')?.split(' ') || [];
         let activityType = 'unknown';
         for (const cls of activityClasses) {
@@ -225,18 +231,15 @@ const syncCourseToDatabase = async (req, res) => {
             break;
           }
         }
-
         const activityId = activityElement.attr('data-id');
         const isIndented = activityElement.hasClass('indented');
         const activityBadge = activityElement.find('.activitybadge').text().trim();
-
         const completionButton = activityElement.find('.completion-dropdown button');
         let completionStatus = 'todo';
         if (completionButton.length > 0) {
           const buttonText = completionButton.text().trim();
           if (buttonText.includes('Done')) completionStatus = 'done';
         }
-
         const dates = [];
         let dueDate = null;
         activityElement.find('[data-region="activity-dates"] div').each((i, dateEl) => {
@@ -246,10 +249,8 @@ const syncCourseToDatabase = async (req, res) => {
             if (!dueDate) dueDate = parseDueDate(dateText);
           }
         });
-
         if (completionStatus === 'done') completedActivities++;
         totalActivities++;
-
         activities.push({
           id: activityId || `${sectionId}_${activityIndex}`,
           name: activityName || 'Unnamed Activity',
@@ -278,7 +279,6 @@ const syncCourseToDatabase = async (req, res) => {
       }
     });
 
-    // Prepare course data
     const courseData = {
       courseId: courseId,
       courseName: courseName,
@@ -292,44 +292,25 @@ const syncCourseToDatabase = async (req, res) => {
       completedActivities: completedActivities
     };
 
-    // Update user
     let retries = 3;
     let updated = false;
-
     while (retries > 0 && !updated) {
       try {
-        // Get fresh user document
         user = await User.findOne({ email });
-
-        // Find index of existing course
         const existingIndex = user.courses.findIndex(c => c.courseId === courseId);
-
         if (existingIndex >= 0) {
-          // Update existing course
           user.courses[existingIndex] = { ...user.courses[existingIndex].toObject(), ...courseData };
         } else {
-          // Add new course
           user.courses.push(courseData);
         }
-
-        // Calculate stats using the helper function
         const stats = calculateStats(user.courses);
-
-        user.courseStats = {
-          ...stats,
-          lastUpdated: new Date()
-        };
-
-        // Save with version check
+        user.courseStats = { ...stats, lastUpdated: new Date() };
         await user.save();
         updated = true;
-
         console.log(`✅ Synced ${courseName}: ${totalActivities} activities, ${completedActivities} completed`);
-
       } catch (err) {
         if (err.name === 'VersionError') {
           retries--;
-          console.log(`⚠️ Version conflict for ${courseName}, retrying... (${retries} left)`);
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
           throw err;
@@ -337,17 +318,7 @@ const syncCourseToDatabase = async (req, res) => {
       }
     }
 
-    if (!updated) {
-      throw new Error('Failed to sync after multiple retries');
-    }
-
-    res.json({
-      success: true,
-      cached: false,
-      course: courseData,
-      stats: user.courseStats
-    });
-
+    res.json({ success: true, cached: false, course: courseData, stats: user.courseStats });
   } catch (error) {
     console.error('Sync course error:', error);
     res.status(500).json({ error: error.message });
@@ -358,14 +329,11 @@ const syncCourseToDatabase = async (req, res) => {
 const updateActivityCompletion = async (req, res) => {
   try {
     const { email, courseId, activityId, isCompleted } = req.body;
-
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
-
     const course = user.courses.find(c => c.courseId === courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
-    // Find and update activity
     let activityFound = false;
     for (const section of course.sections) {
       const activity = section.activities.find(a => a.id === activityId);
@@ -376,16 +344,10 @@ const updateActivityCompletion = async (req, res) => {
         break;
       }
     }
-
     if (!activityFound) return res.status(404).json({ error: 'Activity not found' });
 
-    // Recalculate stats using helper function
     const stats = calculateStats(user.courses);
-
-    // Update course totals
-    let totalActivities = 0;
-    let completedActivities = 0;
-
+    let totalActivities = 0, completedActivities = 0;
     for (const c of user.courses) {
       if (c.isArchived) continue;
       for (const s of c.sections) {
@@ -395,28 +357,14 @@ const updateActivityCompletion = async (req, res) => {
         }
       }
     }
-
     if (course) {
       course.totalActivities = totalActivities;
       course.completedActivities = completedActivities;
     }
-
-    user.courseStats = {
-      ...stats,
-      lastUpdated: new Date()
-    };
-
+    user.courseStats = { ...stats, lastUpdated: new Date() };
     await user.save();
 
-    res.json({
-      success: true,
-      stats: user.courseStats,
-      courseStats: {
-        totalActivities: course?.totalActivities || 0,
-        completedActivities: course?.completedActivities || 0
-      }
-    });
-
+    res.json({ success: true, stats: user.courseStats, courseStats: { totalActivities: course?.totalActivities || 0, completedActivities: course?.completedActivities || 0 } });
   } catch (error) {
     console.error('Update activity error:', error);
     res.status(500).json({ error: error.message });
@@ -427,12 +375,9 @@ const updateActivityCompletion = async (req, res) => {
 const getCourseStats = async (req, res) => {
   try {
     const { email } = req.params;
-
     const user = await User.findOne({ email }).select('courseStats');
     if (!user) return res.status(404).json({ error: 'User not found' });
-
     res.json({ success: true, stats: user.courseStats });
-
   } catch (error) {
     console.error('Get course stats error:', error);
     res.status(500).json({ error: error.message });
@@ -453,7 +398,6 @@ const triggerBackgroundSync = async (req, res) => {
 
 const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
   console.log(`🔄 Syncing single course: ${courseName}`);
-
   let session = userSessions.get(email);
   if (!session) {
     const user = await User.findOne({ email });
@@ -464,44 +408,30 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
       throw new Error('Not logged in to LMS');
     }
   }
-
   const user = await User.findOne({ email });
   if (!user) throw new Error('User not found');
-
   const client = createLMSClient(session.cookies);
-
-  // Ensure valid session
   const sessionValid = await ensureValidSession(email, client, user);
-  if (!sessionValid) {
-    throw new Error('Session invalid');
-  }
-
+  if (!sessionValid) throw new Error('Session invalid');
   const url = courseUrl.startsWith('http') ? courseUrl : `https://uphslms.com${courseUrl}`;
   const response = await client.get(url);
   const $ = cheerio.load(response.data);
-
   const courseTitle = $('h1').first().text().trim();
   const sections = [];
-  let totalActivities = 0;
-  let completedActivities = 0;
-
+  let totalActivities = 0, completedActivities = 0;
   $('li.section.course-section.main').each((sectionIndex, section) => {
     const sectionElement = $(section);
     const sectionHeader = sectionElement.find('.sectionname a');
     const sectionName = sectionHeader.text().trim();
     const sectionId = sectionElement.attr('data-sectionid');
     const sectionNumber = sectionElement.attr('data-number');
-
     if (!sectionName) return;
-
     const activities = [];
-
     sectionElement.find('li.activity').each((activityIndex, activity) => {
       const activityElement = $(activity);
       const activityLink = activityElement.find('.activityname a');
       const activityName = activityLink.text().trim();
       const activityHref = activityLink.attr('href');
-
       const activityClasses = activityElement.attr('class')?.split(' ') || [];
       let activityType = 'unknown';
       for (const cls of activityClasses) {
@@ -510,18 +440,15 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
           break;
         }
       }
-
       const activityId = activityElement.attr('data-id');
       const isIndented = activityElement.hasClass('indented');
       const activityBadge = activityElement.find('.activitybadge').text().trim();
-
       const completionButton = activityElement.find('.completion-dropdown button');
       let completionStatus = 'todo';
       if (completionButton.length > 0) {
         const buttonText = completionButton.text().trim();
         if (buttonText.includes('Done')) completionStatus = 'done';
       }
-
       const dates = [];
       let dueDate = null;
       activityElement.find('[data-region="activity-dates"] div').each((i, dateEl) => {
@@ -531,10 +458,8 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
           if (!dueDate) dueDate = parseDueDate(dateText);
         }
       });
-
       if (completionStatus === 'done') completedActivities++;
       totalActivities++;
-
       activities.push({
         id: activityId || `${sectionId}_${activityIndex}`,
         name: activityName || 'Unnamed Activity',
@@ -550,7 +475,6 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
         lastSynced: new Date()
       });
     });
-
     if (activities.length > 0) {
       sections.push({
         id: sectionId,
@@ -562,8 +486,6 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
       });
     }
   });
-
-  // Update or add course
   const existingCourseIndex = user.courses.findIndex(c => c.courseId === courseId);
   const courseData = {
     courseId: courseId,
@@ -577,197 +499,80 @@ const syncSingleCourseToDB = async (email, courseId, courseName, courseUrl) => {
     totalActivities: totalActivities,
     completedActivities: completedActivities
   };
-
   if (existingCourseIndex >= 0) {
     user.courses[existingCourseIndex] = { ...user.courses[existingCourseIndex].toObject(), ...courseData };
   } else {
     user.courses.push(courseData);
   }
-
   await user.save();
-
-  console.log(`✅ Synced ${courseName}: ${totalActivities} activities, ${completedActivities} completed`);
-
   return { courseData, stats: { totalActivities, completedActivities } };
 };
 
-// Sync all courses (initial full sync)
+// Sync all courses
 const syncAllCourses = async (req, res) => {
   try {
     const { email } = req.body;
-
     console.log(`🔄 Full sync triggered for ${email}`);
-
-    // Get user
     let user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Get or create session
+    if (!user) return res.status(404).json({ error: 'User not found' });
     let session = userSessions.get(email);
     if (!session) {
-      // Try to login with stored credentials
       if (user.lmsUsername && user.lmsPassword) {
         console.log('🔄 Logging in with stored credentials...');
-
         const client = createLMSClient();
         const loginUrl = 'https://uphslms.com/login/index.php';
-
         const loginPage = await client.get(loginUrl);
         let $ = cheerio.load(loginPage.data);
         const logintoken = $('input[name="logintoken"]').val();
-
-        await client.post(loginUrl,
-          new URLSearchParams({
-            username: user.lmsUsername,
-            password: user.lmsPassword,
-            logintoken: logintoken,
-            anchor: ''
-          }), {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Origin': 'https://uphslms.com/',
-              'Referer': loginUrl
-            }
-          });
-
+        await client.post(loginUrl, new URLSearchParams({ username: user.lmsUsername, password: user.lmsPassword, logintoken: logintoken, anchor: '' }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://uphslms.com/', 'Referer': loginUrl } });
         const dashboard = await client.get('https://uphslms.com/my/');
         if (!dashboard.data.includes('Log in')) {
           const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
           const cookieStrings = cookies.map(c => c.cookieString());
-
-          session = {
-            cookies: cookieStrings,
-            timestamp: Date.now(),
-            username: user.lmsUsername
-          };
+          session = { cookies: cookieStrings, timestamp: Date.now(), username: user.lmsUsername };
           userSessions.set(email, session);
-
-          // Update user with cookies
-          await User.findOneAndUpdate(
-            { email },
-            {
-              lmsCookies: cookieStrings,
-              lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
-              lmsLastLogin: new Date()
-            }
-          );
+          await User.findOneAndUpdate({ email }, { lmsCookies: cookieStrings, lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), lmsLastLogin: new Date() });
           console.log('✅ Login successful, session created');
         } else {
-          console.log('❌ Login failed');
-          return res.status(401).json({ error: 'LMS login failed. Please check your credentials.' });
+          return res.status(401).json({ error: 'LMS login failed' });
         }
       } else {
-        return res.status(401).json({ error: 'No LMS credentials found. Please login first.' });
+        return res.status(401).json({ error: 'No LMS credentials found' });
       }
     }
-
     const client = createLMSClient(session.cookies);
-
-    // Get all courses from LMS
     const coursesResponse = await client.get('https://uphslms.com/my/courses.php');
     let $ = cheerio.load(coursesResponse.data);
-
     const courses = [];
     $('a[href*="course/view.php"]').each((i, el) => {
       const href = $(el).attr('href');
       const name = $(el).text().trim();
       if (href && name && !href.includes('login')) {
-        courses.push({
-          id: href.split('=')[1] || i.toString(),
-          name: name,
-          url: href.startsWith('http') ? href : `https://uphslms.com${href}`
-        });
+        courses.push({ id: href.split('=')[1] || i.toString(), name: name, url: href.startsWith('http') ? href : `https://uphslms.com${href}` });
       }
     });
-
     console.log(`📚 Found ${courses.length} courses to sync`);
-
-    // Send immediate response that sync started
-    res.json({
-      success: true,
-      message: `Syncing ${courses.length} courses. This may take a minute...`,
-      coursesCount: courses.length
-    });
-
-    // Sync each course and SAVE to database
+    res.json({ success: true, message: `Syncing ${courses.length} courses...`, coursesCount: courses.length });
     const syncedCourses = [];
-
     for (let i = 0; i < courses.length; i++) {
       const course = courses[i];
       try {
         console.log(`📚 Syncing (${i + 1}/${courses.length}): ${course.name}`);
-
-        // Sync the course
         const result = await syncSingleCourseToDB(email, course.id, course.name, course.url);
         syncedCourses.push(result.courseData);
-
-        // Add delay between syncs
         await new Promise(resolve => setTimeout(resolve, 2000));
-
       } catch (e) {
         console.log(`❌ Failed to sync ${course.name}:`, e.message);
       }
     }
-
-    // Get updated user with all synced courses
     const updatedUser = await User.findOne({ email });
-
-    // Recalculate all stats
-    const EXCLUDED_COURSES = ['B-Library', 'B-LIBRARY', 'Library', 'Binan - College E-library'];
-    let totalTasks = 0, completedTasks = 0;
-    let totalQuizzes = 0, completedQuizzes = 0;
-    let totalAssignments = 0, completedAssignments = 0;
-
-    for (const c of updatedUser.courses) {
-      if (c.isArchived) continue;
-
-      const isExcluded = EXCLUDED_COURSES.some(excluded =>
-        c.courseName.toLowerCase().includes(excluded.toLowerCase())
-      );
-      if (isExcluded) continue;
-
-      for (const s of c.sections) {
-        for (const a of s.activities) {
-          const isDone = a.completionStatus === 'done';
-          switch (a.type) {
-            case 'assign':
-              totalAssignments++;
-              if (isDone) completedAssignments++;
-              break;
-            case 'quiz':
-              totalQuizzes++;
-              if (isDone) completedQuizzes++;
-              break;
-            default:
-              if (a.type !== 'forum' && a.type !== 'resource' && a.type !== 'url') {
-                totalTasks++;
-                if (isDone) completedTasks++;
-              }
-          }
-        }
-      }
-    }
-
-    updatedUser.courseStats = {
-      totalTasks, completedTasks,
-      totalQuizzes, completedQuizzes,
-      totalAssignments, completedAssignments,
-      lastUpdated: new Date()
-    };
-
+    const stats = calculateStats(updatedUser.courses);
+    updatedUser.courseStats = { ...stats, lastUpdated: new Date() };
     await updatedUser.save();
-
     console.log(`✅ Full sync completed: ${syncedCourses.length} courses synced`);
-    console.log(`📊 Stats - Tasks: ${completedTasks}/${totalTasks}, Quizzes: ${completedQuizzes}/${totalQuizzes}, Assignments: ${completedAssignments}/${totalAssignments}`);
-
   } catch (error) {
     console.error('Sync all courses error:', error);
-    // Don't send error response if already sent
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
-    }
+    if (!res.headersSent) res.status(500).json({ error: error.message });
   }
 };
 
@@ -775,11 +580,7 @@ const syncCourseById = async (req, res) => {
   try {
     const { email, courseId, forceRefresh } = req.body;
     console.log(`🔄 Syncing course by ID: ${courseId} for ${email}`);
-
-    res.json({
-      success: true,
-      message: 'Course sync queued'
-    });
+    res.json({ success: true, message: 'Course sync queued' });
   } catch (error) {
     console.error('Sync course by ID error:', error);
     res.status(500).json({ error: error.message });
@@ -789,51 +590,23 @@ const syncCourseById = async (req, res) => {
 const updateActivityByUrl = async (req, res) => {
   try {
     let { email, courseId, activityUrl, isCompleted } = req.body;
-
-    // Clean the URL - remove any duplicate https prefixes
     if (activityUrl) {
-      // Remove duplicate https://
       activityUrl = activityUrl.replace(/https:\/\/uphslms\.comhttps:\/\/uphslms\.com/g, 'https://uphslms.com');
       activityUrl = activityUrl.replace(/https:\/\/uphslms\.comhttps:\/\//g, 'https://uphslms.com/');
-      // Also handle relative paths
-      if (!activityUrl.startsWith('http')) {
-        activityUrl = `https://uphslms.com${activityUrl}`;
-      }
+      if (!activityUrl.startsWith('http')) activityUrl = `https://uphslms.com${activityUrl}`;
     }
-
-    console.log(`🔍 Looking for activity by URL: ${activityUrl}`);
-
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
-
     const course = user.courses.find(c => c.courseId === courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
-
-    // Find activity by URL - try multiple matching strategies
     let activityFound = false;
     let matchedActivity = null;
-
+    const getActivityIdFromUrl = (url) => url?.match(/id=(\d+)/)?.[1] || null;
+    const requestActivityId = getActivityIdFromUrl(activityUrl);
     for (const section of course.sections) {
       for (const activity of section.activities) {
-        // Extract ID from URLs for comparison
-        const getActivityIdFromUrl = (url) => {
-          const match = url?.match(/id=(\d+)/);
-          return match ? match[1] : null;
-        };
-
-        const requestActivityId = getActivityIdFromUrl(activityUrl);
         const storedActivityId = getActivityIdFromUrl(activity.url);
-
-        // Match by ID if both have IDs
-        if (requestActivityId && storedActivityId && requestActivityId === storedActivityId) {
-          matchedActivity = activity;
-          activityFound = true;
-          break;
-        }
-
-        // Also try direct URL match
-        if (activity.url === activityUrl ||
-            activity.url?.includes(`id=${getActivityIdFromUrl(activityUrl)}`)) {
+        if ((requestActivityId && storedActivityId && requestActivityId === storedActivityId) || activity.url === activityUrl) {
           matchedActivity = activity;
           activityFound = true;
           break;
@@ -841,75 +614,19 @@ const updateActivityByUrl = async (req, res) => {
       }
       if (activityFound) break;
     }
-
-    if (!activityFound || !matchedActivity) {
-      console.log(`⚠️ Activity not found for URL: ${activityUrl}`);
-      return res.status(404).json({ error: 'Activity not found' });
-    }
-
+    if (!matchedActivity) return res.status(404).json({ error: 'Activity not found' });
     matchedActivity.completionStatus = isCompleted ? 'done' : 'todo';
     matchedActivity.lastSynced = new Date();
-
-    console.log(`✅ Found and updated activity: ${matchedActivity.name}`);
-
-    // Recalculate stats (same as before)
-    const EXCLUDED_COURSES = ['B-Library', 'B-LIBRARY', 'Library', 'Binan - College E-library'];
-
-    let totalTasks = 0, completedTasks = 0;
-    let totalQuizzes = 0, completedQuizzes = 0;
-    let totalAssignments = 0, completedAssignments = 0;
-
-    for (const c of user.courses) {
-      if (c.isArchived) continue;
-
-      const isExcluded = EXCLUDED_COURSES.some(excluded =>
-        c.courseName.toLowerCase().includes(excluded.toLowerCase())
-      );
-      if (isExcluded) continue;
-
-      for (const s of c.sections) {
-        for (const a of s.activities) {
-          const isDone = a.completionStatus === 'done';
-          switch (a.type) {
-            case 'assign':
-              totalAssignments++;
-              if (isDone) completedAssignments++;
-              break;
-            case 'quiz':
-              totalQuizzes++;
-              if (isDone) completedQuizzes++;
-              break;
-            default:
-              if (a.type !== 'forum' && a.type !== 'resource' && a.type !== 'url') {
-                totalTasks++;
-                if (isDone) completedTasks++;
-              }
-          }
-        }
-      }
-    }
-
-    user.courseStats = {
-      totalTasks, completedTasks,
-      totalQuizzes, completedQuizzes,
-      totalAssignments, completedAssignments,
-      lastUpdated: new Date()
-    };
-
+    const stats = calculateStats(user.courses);
+    user.courseStats = { ...stats, lastUpdated: new Date() };
     await user.save();
-
-    res.json({
-      success: true,
-      stats: user.courseStats
-    });
-
+    res.json({ success: true, stats: user.courseStats });
   } catch (error) {
     console.error('Update activity by URL error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Export all functions
 module.exports = {
   getStoredCourses,
   getStoredCourse,

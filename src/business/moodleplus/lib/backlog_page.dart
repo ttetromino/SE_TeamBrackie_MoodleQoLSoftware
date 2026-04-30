@@ -26,6 +26,11 @@ class _BacklogPageState extends State<BacklogPage> {
   String _layoutMode = 'compact';
   String? _errorMessage;
 
+  // Selection state for bulk operations
+  Set<String> _selectedItemIds = {};
+  bool get _isAllSelected => _selectedItemIds.length == _items.length && _items.isNotEmpty;
+  bool get _hasSelection => _selectedItemIds.isNotEmpty;
+
   // Filter state
   String _currentFilterBy = 'none';
   String _currentPriority = 'all';
@@ -60,6 +65,7 @@ class _BacklogPageState extends State<BacklogPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _selectedItemIds.clear(); // Clear selection when loading new items
     });
 
     try {
@@ -182,9 +188,10 @@ class _BacklogPageState extends State<BacklogPage> {
 
     if (confirmed != true) return;
 
-    // OPTIMISTIC UI UPDATE - Remove immediately for better UX
+    // Remove from UI immediately for better UX
     setState(() {
       _items.removeWhere((i) => i.id == item.id);
+      _selectedItemIds.remove(item.id);
     });
 
     setState(() => _isLoading = true);
@@ -193,7 +200,7 @@ class _BacklogPageState extends State<BacklogPage> {
       final success = await _backlogService.completeItem(
         item.id,
         widget.email,
-        item: item, // Pass the item directly
+        item: item,
       );
 
       if (success && mounted) {
@@ -203,7 +210,6 @@ class _BacklogPageState extends State<BacklogPage> {
             backgroundColor: Colors.green,
           ),
         );
-        // Refresh stats on home page
         widget.onTaskCompleted?.call();
       } else {
         // If failed, add the item back
@@ -219,7 +225,6 @@ class _BacklogPageState extends State<BacklogPage> {
         );
       }
     } catch (e) {
-      // If failed, add the item back
       setState(() {
         _items.add(item);
         _items.sort((a, b) => a.dueDate?.compareTo(b.dueDate ?? DateTime.now()) ?? 0);
@@ -238,6 +243,111 @@ class _BacklogPageState extends State<BacklogPage> {
     }
   }
 
+  // Select/Deselect all items
+  void _toggleSelectAll() {
+    setState(() {
+      if (_isAllSelected) {
+        _selectedItemIds.clear();
+      } else {
+        _selectedItemIds = _items.map((item) => item.id).toSet();
+      }
+    });
+  }
+
+  // Bulk complete selected tasks
+  Future<void> _completeSelectedTasks() async {
+    if (_selectedItemIds.isEmpty) return;
+
+    final selectedItems = _items.where((item) => _selectedItemIds.contains(item.id)).toList();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Selected Tasks'),
+        content: Text('Are you sure you want to mark ${_selectedItemIds.length} task(s) as completed?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Complete All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Remove selected items from UI immediately
+    if (mounted) {
+      setState(() {
+        _items.removeWhere((item) => _selectedItemIds.contains(item.id));
+        _selectedItemIds.clear();
+      });
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    int completedCount = 0;
+    int failedCount = 0;
+    final failedItems = <BacklogItem>[];
+
+    for (final item in selectedItems) {
+      final success = await _backlogService.completeItem(
+        item.id,
+        widget.email,
+        item: item,
+      );
+
+      if (success) {
+        completedCount++;
+      } else {
+        failedCount++;
+        failedItems.add(item);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    // Add back any failed items
+    if (failedItems.isNotEmpty && mounted) {
+      setState(() {
+        _items.addAll(failedItems);
+        _items.sort((a, b) => a.dueDate?.compareTo(b.dueDate ?? DateTime.now()) ?? 0);
+      });
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    if (mounted) {
+      if (failedCount == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ $completedCount tasks completed!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ $completedCount completed, $failedCount failed'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      widget.onTaskCompleted?.call();
+    }
+  }
+
   void _toggleLayout() {
     final newMode = _layoutMode == 'compact' ? 'expanded' : 'compact';
     setState(() => _layoutMode = newMode);
@@ -250,6 +360,9 @@ class _BacklogPageState extends State<BacklogPage> {
     String? courseCode,
     bool? showPinnedOnly,
   }) async {
+    // Clear selection when applying filters
+    _selectedItemIds.clear();
+
     setState(() {
       _currentFilterBy = filterBy ?? _currentFilterBy;
       _currentPriority = priority ?? _currentPriority;
@@ -277,6 +390,45 @@ class _BacklogPageState extends State<BacklogPage> {
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
+          // Select All button
+          if (_items.isNotEmpty)
+            IconButton(
+              icon: Icon(
+                _isAllSelected ? Icons.deselect : Icons.select_all,
+                color: Colors.white,
+              ),
+              onPressed: _toggleSelectAll,
+              tooltip: _isAllSelected ? 'Deselect All' : 'Select All',
+            ),
+          // Bulk Complete button with badge
+          if (_hasSelection)
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.done_all, color: Colors.green),
+                  onPressed: _completeSelectedTasks,
+                  tooltip: 'Complete Selected (${_selectedItemIds.length})',
+                ),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                    child: Text(
+                      '${_selectedItemIds.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          // Layout toggle button
           IconButton(
             icon: Icon(
               _layoutMode == 'compact' ? Icons.view_module : Icons.view_agenda,
@@ -286,6 +438,7 @@ class _BacklogPageState extends State<BacklogPage> {
                 ? 'Switch to expanded view'
                 : 'Switch to compact view',
           ),
+          // Sync button
           IconButton(
             icon: _isSyncing
                 ? const SizedBox(
@@ -300,6 +453,7 @@ class _BacklogPageState extends State<BacklogPage> {
             onPressed: _isSyncing ? null : _syncBacklog,
             tooltip: 'Sync with LMS',
           ),
+          // Filter button with badge
           IconButton(
             icon: Badge(
               isLabelVisible:
@@ -309,6 +463,8 @@ class _BacklogPageState extends State<BacklogPage> {
               child: const Icon(Icons.filter_list),
             ),
             onPressed: () {
+              // Clear selection when opening filter
+              _selectedItemIds.clear();
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
@@ -433,7 +589,10 @@ class _BacklogPageState extends State<BacklogPage> {
     final unpinnedItems = _items.where((i) => !i.isPinned).toList();
 
     return RefreshIndicator(
-      onRefresh: _loadBacklogItems,
+      onRefresh: () async {
+        _selectedItemIds.clear();
+        await _loadBacklogItems();
+      },
       color: const Color(0xFF9D2BD1),
       child: CustomScrollView(
         slivers: [
@@ -492,6 +651,16 @@ class _BacklogPageState extends State<BacklogPage> {
                   (context, index) => BacklogItemCard(
                 item: pinnedItems[index],
                 layoutMode: _layoutMode,
+                isSelected: _selectedItemIds.contains(pinnedItems[index].id),
+                onSelect: () {
+                  setState(() {
+                    if (_selectedItemIds.contains(pinnedItems[index].id)) {
+                      _selectedItemIds.remove(pinnedItems[index].id);
+                    } else {
+                      _selectedItemIds.add(pinnedItems[index].id);
+                    }
+                  });
+                },
                 onTogglePin: () => _togglePin(pinnedItems[index]),
                 onComplete: () => _completeTask(pinnedItems[index]),
               ),
@@ -522,6 +691,16 @@ class _BacklogPageState extends State<BacklogPage> {
                   (context, index) => BacklogItemCard(
                 item: unpinnedItems[index],
                 layoutMode: _layoutMode,
+                isSelected: _selectedItemIds.contains(unpinnedItems[index].id),
+                onSelect: () {
+                  setState(() {
+                    if (_selectedItemIds.contains(unpinnedItems[index].id)) {
+                      _selectedItemIds.remove(unpinnedItems[index].id);
+                    } else {
+                      _selectedItemIds.add(unpinnedItems[index].id);
+                    }
+                  });
+                },
                 onTogglePin: () => _togglePin(unpinnedItems[index]),
                 onComplete: () => _completeTask(unpinnedItems[index]),
               ),

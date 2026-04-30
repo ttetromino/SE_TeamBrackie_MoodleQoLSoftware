@@ -270,6 +270,9 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
     );
 
     if (result['success'] == true) {
+      // SYNC BACKLOG AFTER COMPLETING ACTIVITY
+      await _courseService.syncBacklogAfterCompletion(widget.email);
+
       await _loadContents();
 
       // NOTIFY BACKLOG - Call the callback to refresh backlog
@@ -278,7 +281,7 @@ class _CourseContentsPageState extends State<CourseContentsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Activity marked as complete!'),
+            content: Text('Activity marked as complete! Backlog updated.'),
             backgroundColor: Colors.green,
           ),
         );

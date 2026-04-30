@@ -21,8 +21,9 @@ class BacklogService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        print('✅ Synced ${data['count']} backlog items');
-        return data['count'];
+        final count = data['count'] ?? 0;
+        print('✅ Synced $count backlog items');
+        return count;
       }
       return 0;
     } catch (e) {
@@ -87,7 +88,6 @@ class BacklogService {
   // Mark item as completed
   Future<bool> completeItem(String itemId, String email, {BacklogItem? item}) async {
     try {
-      // If item is provided, use it directly
       if (item == null) {
         print('❌ No item data provided, cannot complete');
         return false;
@@ -95,7 +95,6 @@ class BacklogService {
 
       print('📝 Marking backlog item complete: ${item.activityName}');
 
-      // Use the SAME course service endpoint that works in Course Contents
       final courseService = CourseService();
       final result = await courseService.markActivityComplete(
         email: email,
@@ -105,7 +104,6 @@ class BacklogService {
       );
 
       if (result['success'] == true) {
-        // Also mark the backlog item as completed in backlog collection
         final response = await http.put(
           Uri.parse('$baseUrl/api/backlog/complete/$itemId'),
           headers: {'Content-Type': 'application/json'},
@@ -115,7 +113,6 @@ class BacklogService {
         print('✅ Backlog item completed and course activity updated');
         return true;
       }
-
       return false;
     } catch (e) {
       print('Complete item error: $e');
@@ -269,11 +266,10 @@ class BacklogItem {
       isCompleted: json['isCompleted'] ?? false,
       sectionName: json['sectionName'] ?? '',
       activityUrl: json['activityUrl'],
-
     );
   }
 
-  // Calculate time remaining
+  // Calculate time remaining or past due
   Duration? get timeRemaining {
     if (dueDate == null) return null;
     final now = DateTime.now();
@@ -281,19 +277,27 @@ class BacklogItem {
     return dueDate!.difference(now);
   }
 
-  // Format time remaining as HH:MM
+  // Format time remaining or past due message
   String get formattedTimeRemaining {
     if (dueDate == null) return 'No deadline';
-    final remaining = timeRemaining;
-    if (remaining == null) return 'Past due';
-    if (remaining.isNegative) return 'Past due';
 
+    final now = DateTime.now();
+    if (dueDate!.isBefore(now)) {
+      final daysPast = now.difference(dueDate!).inDays;
+      if (daysPast == 0) {
+        final hoursPast = now.difference(dueDate!).inHours;
+        return 'Due ${hoursPast} hour${hoursPast != 1 ? 's' : ''} ago';
+      }
+      return 'Due $daysPast day${daysPast != 1 ? 's' : ''} ago';
+    }
+
+    final remaining = dueDate!.difference(now);
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}'; // HH:MM
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
   }
 
-  // Get urgency color based on priority and time remaining
+  // Get urgency color based on priority
   Color get urgencyColor {
     if (isCompleted) return Colors.grey;
 
@@ -306,6 +310,8 @@ class BacklogItem {
         return Colors.amber;
       case 'low':
         return Colors.green;
+      case 'past_due':
+        return Colors.red.shade700;
       default:
         return Colors.grey;
     }
@@ -322,6 +328,8 @@ class BacklogItem {
         return 'Medium Priority';
       case 'low':
         return 'Low Priority';
+      case 'past_due':
+        return 'Past Due';
       default:
         return 'No Deadline';
     }
@@ -343,3 +351,4 @@ class BacklogItem {
     }
   }
 }
+

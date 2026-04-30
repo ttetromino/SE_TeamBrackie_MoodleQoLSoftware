@@ -16,6 +16,8 @@ import 'calendar_page.dart';
 import 'services/course_service.dart';
 import 'package:http/http.dart' as http;
 import 'services/notification_service.dart';
+import 'services/backlog_service.dart';
+
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
 
@@ -31,6 +33,7 @@ class _HomePageState extends State<HomePage>
   late LMSService _lmsService;
   late ArchiveService _archiveService;
   late CourseService _courseService;
+  late BacklogService _backlogService;
 
   final NotificationService _notificationService = NotificationService();
   bool _notificationsEnabled = true;
@@ -63,6 +66,7 @@ class _HomePageState extends State<HomePage>
     super.initState();
     _initNotifications();
     _courseService = CourseService();
+    _backlogService = BacklogService();
     _tabController = TabController(length: 5, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
     _archiveService = ArchiveService();
@@ -72,6 +76,78 @@ class _HomePageState extends State<HomePage>
       _loadArchivedCourses();
     });
     _checkBiometricStatus();
+  }
+
+  Future<void> _refreshStatsFromBacklog() async {
+    if (!_isLMSLoggedIn) return;
+    if (!mounted) return;
+
+    print('🔄 Refreshing stats from backlog...');
+
+    try {
+      // First, sync backlog to get latest data
+      await _backlogService.syncBacklog(widget.user['email']);
+
+      // Then get backlog items
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/backlog/items/${widget.user['email']}?showCompleted=true'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> allItems = data['items'] ?? [];
+
+        int totalQuizzes = 0;
+        int completedQuizzes = 0;
+        int totalAssignments = 0;
+        int completedAssignments = 0;
+
+        for (final item in allItems) {
+          final type = item['activityType'];
+          final isCompleted = item['isCompleted'] ?? false;
+
+          if (type == 'quiz') {
+            totalQuizzes++;
+            if (isCompleted) completedQuizzes++;
+          } else if (type == 'assign') {
+            totalAssignments++;
+            if (isCompleted) completedAssignments++;
+          }
+        }
+
+        final totalTasks = totalQuizzes + totalAssignments;
+        final completedTasks = completedQuizzes + completedAssignments;
+
+        print('📊 BACKLOG STATS:');
+        print('   Total: $completedTasks/$totalTasks');
+        print('   Quizzes: $completedQuizzes/$totalQuizzes');
+        print('   Assignments: $completedAssignments/$totalAssignments');
+
+        if (mounted) {
+          setState(() {
+            _stats = CourseStats(
+              totalTasks: 0,
+              completedTasks: 0,
+              totalQuizzes: totalQuizzes,
+              completedQuizzes: completedQuizzes,
+              totalAssignments: totalAssignments,
+              completedAssignments: completedAssignments,
+            );
+          });
+        }
+      } else if (response.statusCode == 404) {
+        print('⚠️ No backlog found for user');
+      }
+    } catch (e) {
+      print('Refresh stats from backlog error: $e');
+    }
+  }
+
+  Future<void> _refreshCourseStats() async {
+    if (!_isLMSLoggedIn) return;
+    if (!mounted) return;
+
+    await _refreshStatsFromBacklog();
   }
 
   Future<void> _initNotifications() async {
@@ -512,7 +588,6 @@ class _HomePageState extends State<HomePage>
     });
 
     try {
-      // Load from database
       List<StoredCourse> storedCourses = await _courseService.getStoredCourses(widget.user['email']);
 
       if (storedCourses.isNotEmpty) {
@@ -522,17 +597,12 @@ class _HomePageState extends State<HomePage>
           link: c.courseUrl,
         )).toList();
 
-        final statsData = await _courseService.getCourseStats(widget.user['email']);
-        _stats = CourseStats(
-          totalTasks: statsData.totalTasks,
-          completedTasks: statsData.completedTasks,
-          totalQuizzes: statsData.totalQuizzes,
-          completedQuizzes: statsData.completedQuizzes,
-          totalAssignments: statsData.totalAssignments,
-          completedAssignments: statsData.completedAssignments,
-        );
+        print('✅ Loaded ${_courses.length} courses from database');
 
-        print('✅ Loaded ${_courses.length} courses');
+        // CRITICAL: Use backlog stats for accurate counts
+        await _refreshStatsFromBacklog();
+
+        print('✅ Stats loaded - Total: ${_stats.totalQuizzes + _stats.totalAssignments}');
       } else {
         _courses = [];
         print('⚠️ No courses found in database');
@@ -802,42 +872,7 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  Future<void> _refreshCourseStats() async {
-    if (!_isLMSLoggedIn) return;
-    if (!mounted) return;
 
-    print('🔄 Refreshing course stats');
-
-    setState(() {
-      _lmsLoading = true;
-    });
-
-    try {
-      // Get fresh stats from database (not from sync)
-      final statsData = await _courseService.getCourseStats(widget.user['email']);
-
-      if (mounted) {
-        setState(() {
-          _stats = CourseStats(
-            totalTasks: statsData.totalTasks,
-            completedTasks: statsData.completedTasks,
-            totalQuizzes: statsData.totalQuizzes,
-            completedQuizzes: statsData.completedQuizzes,
-            totalAssignments: statsData.totalAssignments,
-            completedAssignments: statsData.completedAssignments,
-          );
-          _lmsLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Refresh stats error: $e');
-      if (mounted) {
-        setState(() {
-          _lmsLoading = false;
-        });
-      }
-    }
-  }
 
   // Navigate to archived courses
 
@@ -955,6 +990,11 @@ class _HomePageState extends State<HomePage>
   }
 
   Widget _buildProfileTab() {
+    // Calculate total tasks (quizzes + assignments) for display
+    int totalTasks = _stats.totalQuizzes + _stats.totalAssignments;
+    int completedTasks = _stats.completedQuizzes + _stats.completedAssignments;
+    int remainingTasks = totalTasks - completedTasks;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -1200,11 +1240,32 @@ class _HomePageState extends State<HomePage>
                       Container(height: 40, width: 1, color: Colors.grey[300]),
                       _buildStatItem(
                         icon: Icons.assignment,
-                        value: _courses.isEmpty ? '0' : 'Available',
-                        label: 'Contents',
-                        color: Colors.green,
+                        value: totalTasks.toString(),
+                        label: 'Total Tasks',
+                        color: Colors.blue,
+                      ),
+                      Container(height: 40, width: 1, color: Colors.grey[300]),
+                      _buildStatItem(
+                        icon: Icons.check_circle,
+                        value: remainingTasks.toString(),
+                        label: 'Remaining',
+                        color: Colors.red,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(
+                    value: totalTasks > 0 ? completedTasks / totalTasks : 0,
+                    backgroundColor: Colors.grey[200],
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(8),
+                    minHeight: 8,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$completedTasks of $totalTasks completed',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -1482,7 +1543,10 @@ class _HomePageState extends State<HomePage>
     }
 
     return RefreshIndicator(
-      onRefresh: _loadCourses,
+      onRefresh: () async {
+        await _refreshStatsFromBacklog();
+        await _loadCourses();
+      },
       color: const Color(0xFF9D2BD1),
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
@@ -1738,9 +1802,10 @@ class _HomePageState extends State<HomePage>
     required int totalAssignments,
     required int completedAssignments,
   }) {
-    // Only count quizzes and assignments (exclude regular tasks if they're just resources)
+    // Calculate remaining tasks
     int total = totalQuizzes + totalAssignments;
     int completed = completedQuizzes + completedAssignments;
+    int remaining = total - completed;
     double percent = total == 0 ? 0 : completed / total;
 
     return Container(
@@ -1757,72 +1822,87 @@ class _HomePageState extends State<HomePage>
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 70,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: Text(
-                "${(percent * 100).toInt()}%",
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          // Progress percentage
+          Row(
+            children: [
+              Container(
+                width: 70,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildProgressRow(
-                  "Remaining Tasks",
-                  total - completed,
-                  Colors.red,
-                ),
-                _buildProgressRow(
-                  "Quizzes",
-                  totalQuizzes - completedQuizzes,
-                  Colors.orange,
-                ),
-                _buildProgressRow(
-                  "Assignments",
-                  totalAssignments - completedAssignments,
-                  Colors.purple,
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      children: [
-                        Container(height: 10, color: Colors.grey.shade300),
-                        FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: percent,
-                          child: Container(
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Color(0xFF9D2BD1), Color(0xFF6B1B9A)],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                child: Center(
+                  child: Text(
+                    "${(percent * 100).toInt()}%",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProgressRow(
+                      "Remaining Tasks",
+                      remaining,
+                      Colors.red,
+                    ),
+                    _buildProgressRow(
+                      "Quizzes Remaining",
+                      totalQuizzes - completedQuizzes,
+                      Colors.orange,
+                    ),
+                    _buildProgressRow(
+                      "Assignments Remaining",
+                      totalAssignments - completedAssignments,
+                      Colors.purple,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Progress bar
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                children: [
+                  Container(height: 10, color: Colors.grey.shade300),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: percent,
+                    child: Container(
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF9D2BD1), Color(0xFF6B1B9A)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$completed of $total tasks completed',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
             ),
           ),
         ],
@@ -1844,6 +1924,8 @@ class _HomePageState extends State<HomePage>
       ),
     );
   }
+
+
   Widget _buildNotificationSettingsSection() {
     return Card(
       elevation: 2,
