@@ -283,3 +283,25 @@ void main() {
       print('✅ TC88 - Calendar: High Volume Day View PASSED');
     });
 
+    // ============================================================
+    // TC89: Calendar: Initial Moodle Sync
+    // ============================================================
+    testWidgets('TC89 - Calendar: Initial Moodle Sync', (tester) async {
+      await clearCalendarCache();
+      await loginAndNavigateToCalendar(tester);
+
+      final syncButtons = find.byIcon(Icons.sync);
+      expect(syncButtons, findsWidgets, reason: 'Sync button should exist');
+
+      await tester.tap(syncButtons.first);
+      await tester.pump();
+      await Future.delayed(const Duration(seconds: 8));
+      await tester.pumpAndSettle();
+
+      // Verify calendar still displays after sync
+      final monthYearText = find.textContaining(RegExp(r'[A-Z][a-z]+ \d{4}'));
+      expect(monthYearText, findsWidgets, reason: 'Calendar should still display after sync');
+
+      print('✅ TC89 - Calendar: Initial Moodle Sync PASSED');
+    });
+
