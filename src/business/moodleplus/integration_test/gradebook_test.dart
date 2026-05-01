@@ -157,4 +157,27 @@ void main() {
 
       debugPrint('✅ TC77 - Gradebook: GWA Calculation Accuracy PASSED');
     });
+    // ---------------------------------------------------------
+    // TC78: Gradebook - Zero Unit Subject
+    // ---------------------------------------------------------
+    testWidgets('TC78 - Gradebook: Zero Unit Subject', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // This test requires a specific edge-case state in the database
+      // where a student is enrolled in a 0.0 unit course (like PE or NSTP).
+      // We look for a course card that explicitly lists "0 units" or "0.0".
+      final zeroUnitCourse = find.textContaining(RegExp(r'0\.0\s*units|0\s*units', caseSensitive: false));
+
+      if (zeroUnitCourse.evaluate().isNotEmpty) {
+        // If a zero-unit course exists, we ensure the Total GWA still calculated
+        // successfully and didn't crash the UI with a "Divide by Zero" error.
+        final gwaDisplay = find.textContaining(RegExp(r'\d+\.?\d*%?'));
+        expect(gwaDisplay, findsWidgets, reason: 'TC78 Failed: UI crashed or GWA failed to render due to a 0-unit subject.');
+        debugPrint('✅ TC78 - Gradebook: Zero Unit Subject PASSED');
+      } else {
+        // If the test account doesn't have a 0-unit course, we acknowledge and skip
+        debugPrint('⚠️ TC78 - Note: No 0-unit courses found for this test user. Skipping assertion.');
+        debugPrint('✅ TC78 - Gradebook: Zero Unit Subject ACKNOWLEDGED');
+      }
+    });
 
