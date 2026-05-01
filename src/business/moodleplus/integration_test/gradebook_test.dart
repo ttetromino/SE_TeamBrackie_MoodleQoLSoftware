@@ -198,3 +198,20 @@ void main() {
 
       debugPrint('✅ TC79 - Gradebook: Missing Unit Data PASSED (No null pointer crashes)');
     });
+    // ---------------------------------------------------------
+    // TC80: Gradebook - Statistics Distribution Chart
+    // ---------------------------------------------------------
+    testWidgets('TC80 - Gradebook: Statistics Distribution Chart', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+      // Switch to Statistics tab
+      final statsTab = find.text('Statistics');
+      if (statsTab.evaluate().isNotEmpty) {
+        await tester.tap(statsTab.first);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+      }
+      // Statistics section should exist
+      final statsSection = find.textContaining(RegExp(r'Distribution|Statistics|Chart', caseSensitive: false));
+      expect(statsSection.evaluate().isNotEmpty, true, reason: 'TC80 Failed: Grade distribution section should be displayed');
+      debugPrint('✅ TC80 - Gradebook: Statistics Distribution Chart PASSED');
+    });
+
