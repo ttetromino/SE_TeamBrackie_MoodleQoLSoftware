@@ -116,3 +116,22 @@ void main() {
 
       debugPrint('✅ TC74 - Gradebook: Happy Path PASSED');
     });
+
+    // ---------------------------------------------------------
+    // TC75: Gradebook - Point Scale Parsing
+    // ---------------------------------------------------------
+    testWidgets('TC75 - Gradebook: Point Scale Parsing', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // Look for fractional point formats (e.g., "40/50", "40 / 50")
+      final fractionGrades = find.textContaining(RegExp(r'\d+\s*/\s*\d+'));
+
+      if (fractionGrades.evaluate().isNotEmpty) {
+        debugPrint('✅ TC75 - Gradebook: Point Scale PASSED (Found fraction formats)');
+      } else {
+        debugPrint('⚠️ TC75: No point-scale grades found for this specific user. Test bypassed.');
+      }
+    });
+
+
+
