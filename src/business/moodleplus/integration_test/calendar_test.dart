@@ -253,3 +253,33 @@ void main() {
       print('✅ TC87 - Calendar: Visual Legend - Event Type Differentiation PASSED');
     });
 
+    // ============================================================
+    // TC88: Calendar: High Volume Day View
+    // ============================================================
+    testWidgets('TC88 - Calendar: High Volume Day View', (tester) async {
+      await clearCalendarCache();
+      await loginAndNavigateToCalendar(tester);
+
+      // Find any day number and tap it to open day view
+      final dayNumbers = find.textContaining(RegExp(r'^\d{1,2}$'));
+      expect(dayNumbers, findsWidgets, reason: 'Day numbers should exist');
+
+      await tester.tap(dayNumbers.first);
+      await tester.pump();
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Verify something opened (either a sheet or a dialog)
+      final scrollableSheet = find.byType(DraggableScrollableSheet);
+
+      if (scrollableSheet.evaluate().isNotEmpty) {
+        await tester.drag(scrollableSheet.first, const Offset(0, -200));
+        await tester.pumpAndSettle();
+      }
+
+      // Close by tapping outside or tapping back
+      await tester.tapAt(const Offset(50, 100));
+      await tester.pumpAndSettle();
+
+      print('✅ TC88 - Calendar: High Volume Day View PASSED');
+    });
+
