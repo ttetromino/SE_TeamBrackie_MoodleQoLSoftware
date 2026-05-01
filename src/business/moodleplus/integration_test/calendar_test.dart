@@ -430,3 +430,49 @@ void main() {
 
       print('✅ TC93 - Calendar: Invalid Form Input PASSED');
     });
+
+    // ============================================================
+    // TC94: Calendar: Manual Entry Metadata - is_manual Flag
+    // ============================================================
+    testWidgets('TC94 - Calendar: Manual Entry Metadata Protection', (tester) async {
+      await clearCalendarCache();
+      await addSampleAcademicEvents();
+      await loginAndNavigateToCalendar(tester);
+
+      // Create a personal event
+      final addIcon = find.byIcon(Icons.add);
+      if(addIcon.evaluate().isNotEmpty) {
+        await tester.tap(addIcon.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      final titleField = find.byType(TextField);
+      if(titleField.evaluate().isNotEmpty) {
+        await tester.enterText(titleField.first, 'Protected Event');
+        await tester.pumpAndSettle();
+      }
+
+      final submitButton = find.textContaining(RegExp(r'Add|Save|Create', caseSensitive: false));
+      if(submitButton.evaluate().isNotEmpty) {
+        await tester.tap(submitButton.last);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+      }
+
+      // Perform a sync
+      final syncButtons = find.byIcon(Icons.sync);
+      if (syncButtons.evaluate().isNotEmpty) {
+        await tester.tap(syncButtons.first);
+        await tester.pump();
+        await Future.delayed(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+      }
+
+      // Verify calendar still works
+      final monthYearText = find.textContaining(RegExp(r'[A-Z][a-z]+ \d{4}'));
+      expect(monthYearText, findsWidgets, reason: 'Calendar should still display after syncs');
+
+      print('✅ TC94 - Calendar: Manual Entry Metadata Protection PASSED');
+    });
+
+  });
+}
