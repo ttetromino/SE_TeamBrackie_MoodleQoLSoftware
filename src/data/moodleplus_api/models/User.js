@@ -76,6 +76,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
+  role: { type: String, enum: ['student', 'admin'], default: 'student' },
   lmsUsername: { type: String, required: true },
   lmsPassword: { type: String, required: true },
 
@@ -126,7 +127,10 @@ userSchema.pre('save', async function() {
 
 userSchema.methods.comparePassword = async function(candidatePassword) {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    console.log('🔐 Comparing password...');
+    const result = await bcrypt.compare(candidatePassword, this.password);
+    console.log('🔐 Password match result:', result);
+    return result;
   } catch (error) {
     console.error('Error comparing password:', error);
     return false;
