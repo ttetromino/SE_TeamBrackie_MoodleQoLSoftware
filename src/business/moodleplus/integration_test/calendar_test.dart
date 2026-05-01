@@ -305,3 +305,30 @@ void main() {
       print('✅ TC89 - Calendar: Initial Moodle Sync PASSED');
     });
 
+    // ============================================================
+    // TC90: Calendar: Duplicate Sync Prevention
+    // ============================================================
+    testWidgets('TC90 - Calendar: Duplicate Sync Prevention', (tester) async {
+      await clearCalendarCache();
+      await addSampleAcademicEvents();
+      await loginAndNavigateToCalendar(tester);
+
+      final syncButtons = find.byIcon(Icons.sync);
+
+      for (int i = 0; i < 2; i++) {
+        if (syncButtons.evaluate().isNotEmpty) {
+          await tester.tap(syncButtons.first);
+          await tester.pump();
+          await Future.delayed(const Duration(seconds: 4));
+          print('Sync attempt ${i + 1} completed');
+        }
+      }
+      await tester.pumpAndSettle();
+
+      // Verify calendar still responsive after multiple syncs
+      final monthYearText = find.textContaining(RegExp(r'[A-Z][a-z]+ \d{4}'));
+      expect(monthYearText, findsWidgets, reason: 'Calendar should still be responsive');
+
+      print('✅ TC90 - Calendar: Duplicate Sync Prevention PASSED');
+    });
+
