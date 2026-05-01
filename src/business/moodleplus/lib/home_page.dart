@@ -17,6 +17,9 @@ import 'services/course_service.dart';
 import 'package:http/http.dart' as http;
 import 'services/notification_service.dart';
 import 'services/backlog_service.dart';
+import 'services/admin_service.dart';
+import 'admin_dashboard_page.dart';
+
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -36,8 +39,10 @@ class _HomePageState extends State<HomePage>
   late BacklogService _backlogService;
 
   final NotificationService _notificationService = NotificationService();
-  bool _notificationsEnabled = true;
 
+  bool _notificationsEnabled = true;
+  bool _isAdmin = false;
+  bool _isCheckingAdmin = true;
   List<ArchivedCourse> _archivedCourses = [];
 
   // LMS State
@@ -70,12 +75,27 @@ class _HomePageState extends State<HomePage>
     _tabController = TabController(length: 5, vsync: this);
     _lmsService = LMSService(userId: widget.user['email']);
     _archiveService = ArchiveService();
+    _checkAdminStatus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoLoginToLMS();
       _loadArchivedCourses();
     });
     _checkBiometricStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    print('🔐🔐🔐 CHECKING ADMIN STATUS for: ${widget.user['email']}');
+    final adminService = AdminService();
+    final isAdmin = await adminService.isAdmin(widget.user['email']);
+    print('🔐🔐🔐 RESULT: isAdmin = $isAdmin');
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+        _isCheckingAdmin = false;
+      });
+      print('🔐🔐🔐 _isAdmin set to: $_isAdmin');
+    }
   }
 
   Future<void> _refreshStatsFromBacklog() async {
@@ -884,6 +904,21 @@ class _HomePageState extends State<HomePage>
         backgroundColor: const Color(0xFF9D2BD1),
         foregroundColor: Colors.white,
         actions: [
+          if (!_isCheckingAdmin && _isAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AdminDashboardPage(
+                      adminEmail: widget.user['email'],
+                    ),
+                  ),
+                );
+              },
+              tooltip: 'Admin Dashboard',
+            ),
           // Sync/Update button
           IconButton(
             icon: _isSyncing
