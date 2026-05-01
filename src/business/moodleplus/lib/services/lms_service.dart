@@ -11,7 +11,7 @@ class LMSService {
   LMSService({required this.userId});
 
   // Get courses from LMS (exclude archived)
-  Future<List<LmsCourse>> getCourses() async {
+  Future<List<LmsCourse>> getCourses({int retryCount = 0}) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/courses'),
@@ -21,21 +21,28 @@ class LMSService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
-        // Get archived course IDs to filter them out
         final archivedIds = await _getArchivedCourseIds();
 
         List<LmsCourse> courses = [];
         for (var course in data['courses']) {
-          // US-04-T-02: Skip archived courses
           if (!archivedIds.contains(course['id'].toString())) {
             courses.add(LmsCourse.fromJson(course));
           }
         }
         return courses;
+      } else if (response.statusCode == 401 && retryCount < 2) {
+        // Session expired, try to re-authenticate
+        print('⚠️ Session expired, retrying... (attempt ${retryCount + 1})');
+        await Future.delayed(const Duration(seconds: 1));
+        return await getCourses(retryCount: retryCount + 1);
       }
       return [];
     } catch (e) {
+      if (retryCount < 2) {
+        print('⚠️ Request failed, retrying... (attempt ${retryCount + 1})');
+        await Future.delayed(const Duration(seconds: 1));
+        return await getCourses(retryCount: retryCount + 1);
+      }
       debugPrint('Get courses error: $e');
       return [];
     }
@@ -131,6 +138,11 @@ class LMSService {
   Future<bool> autoLoginLMS() async {
     try {
       print('Attempting auto-login for user: $userId');
+
+      // Clear existing session first to avoid conflicts
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('lms_session_$userId');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/lms/auto-login'),
         headers: {'Content-Type': 'application/json'},
@@ -140,7 +152,14 @@ class LMSService {
       print('Auto-login response: ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true;
+        final success = data['success'] == true;
+
+        if (success) {
+          // Store session info
+          await prefs.setString('lms_session_$userId', DateTime.now().toIso8601String());
+        }
+
+        return success;
       }
       return false;
     } catch (e) {

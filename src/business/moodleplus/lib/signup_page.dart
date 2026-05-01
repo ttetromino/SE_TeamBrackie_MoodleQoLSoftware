@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import 'services/lms_service.dart';
 import 'services/biometric_service.dart';
 import 'package:local_auth/local_auth.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import 'home_page.dart';
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
 
@@ -101,12 +102,12 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _createAccount(
-    String name,
-    String email,
-    String password,
-    String lmsUsername,
-    String lmsPassword,
-  ) async {
+      String name,
+      String email,
+      String password,
+      String lmsUsername,
+      String lmsPassword,
+      ) async {
     final Uri url = Uri.parse('http://10.0.2.2:5000/users');
 
     Map<String, dynamic> requestBody = {
@@ -133,40 +134,72 @@ class _SignupPageState extends State<SignupPage> {
       if (response.statusCode == 201) {
         if (!mounted) return;
 
-        print('Attempting immediate LMS login after signup...');
-        final lmsService = LMSService(userId: email);
-        bool lmsLoginSuccess = await lmsService.loginToLMS(
-          lmsUsername,
-          lmsPassword,
+        print('✅ Account created successfully!');
+
+        // AUTO-LOGIN: Login with the newly created account
+        print('🔄 Auto-logging in...');
+
+        final loginResponse = await http.post(
+          Uri.parse('http://10.0.2.2:5000/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email, 'password': password}),
         );
 
-        if (lmsLoginSuccess) {
-          print('LMS login successful after signup');
+        final loginData = jsonDecode(loginResponse.body);
+
+        if (loginResponse.statusCode == 200) {
+          print('✅ Auto-login successful!');
+
+          // Save last login email
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('last_login_email', email);
+
+          // Attempt LMS login
+          print('Attempting immediate LMS login after signup...');
+          final lmsService = LMSService(userId: email);
+          bool lmsLoginSuccess = await lmsService.loginToLMS(
+            lmsUsername,
+            lmsPassword,
+          );
+
+          if (lmsLoginSuccess) {
+            print('LMS login successful after signup');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Signup successful! Auto-logged in.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            print('LMS login failed after signup');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Signup successful but LMS connection failed. You can try again in the app.',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+
+          // Navigate to HomePage directly
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HomePage(user: loginData['user']),
+              ),
+            );
+          }
+        } else {
+          // If auto-login fails, go to login page
+          print('❌ Auto-login failed, redirecting to login page');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Signup successful! LMS connected.'),
+              content: Text('Account created! Please login.'),
               backgroundColor: Colors.green,
             ),
           );
-        } else {
-          print('LMS login failed after signup');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Signup successful but LMS connection failed. You can try again in the app.',
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-
-        // ALWAYS ask to enable biometrics after signup (if available)
-        if (_biometricAvailable && mounted) {
-          // Wait a moment for the snackbar to be visible
-          await Future.delayed(const Duration(milliseconds: 500));
-          _showBiometricSetupDialog(email);
-        } else {
-          // Navigate to login page
           Navigator.pushReplacementNamed(context, '/login');
         }
       } else {
