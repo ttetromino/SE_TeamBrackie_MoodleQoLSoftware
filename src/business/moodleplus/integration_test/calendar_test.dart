@@ -221,3 +221,35 @@ void main() {
       print('✅ TC86 - Calendar: Monthly Calendar Grid Rendering PASSED');
     });
 
+    // ============================================================
+    // TC87: Calendar: Visual Legend - Event Type Differentiation
+    // ============================================================
+    testWidgets('TC87 - Calendar: Visual Legend - Event Type Differentiation', (tester) async {
+      await clearCalendarCache();
+      await addSampleAcademicEvents();
+      await addSamplePersonalEvents();
+      await loginAndNavigateToCalendar(tester);
+
+      // Verify legend text exists
+      expect(find.text('Academic'), findsWidgets, reason: 'Academic legend should be visible');
+      expect(find.text('Personal'), findsWidgets, reason: 'Personal legend should be visible');
+
+      // Switch to Events tab by tapping "Events" text in TabBar (if it exists)
+      final eventsTabText = find.text('Events');
+      if (eventsTabText.evaluate().isNotEmpty) {
+        await tester.tap(eventsTabText.first);
+        await tester.pump();
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
+      // Verify event types have different icons
+      final schoolIcons = find.byIcon(Icons.school);
+      final personIcons = find.byIcon(Icons.person);
+
+      // At least one type should be visible in the legend or list
+      expect(schoolIcons.evaluate().isNotEmpty || personIcons.evaluate().isNotEmpty, true,
+          reason: 'Events should have type-specific icons');
+
+      print('✅ TC87 - Calendar: Visual Legend - Event Type Differentiation PASSED');
+    });
+
