@@ -513,37 +513,79 @@ const syncAllCourses = async (req, res) => {
   try {
     const { email } = req.body;
     console.log(`🔄 Full sync triggered for ${email}`);
+
     let user = await User.findOne({ email });
     if (!user) return res.status(404).json({ error: 'User not found' });
+
     let session = userSessions.get(email);
+
+    // If no session in memory, try to restore from database or login fresh
     if (!session) {
-      if (user.lmsUsername && user.lmsPassword) {
-        console.log('🔄 Logging in with stored credentials...');
+      console.log('🔄 No session in memory, attempting to restore or login...');
+
+      // Try to restore from database first
+      if (user.lmsCookies && user.lmsCookies.length > 0) {
+        session = {
+          cookies: user.lmsCookies,
+          timestamp: Date.now(),
+          username: user.lmsUsername
+        };
+        userSessions.set(email, session);
+      }
+
+      // If still no session or cookies are invalid, login fresh
+      if (!session || !user.lmsCookies || user.lmsCookies.length === 0) {
+        console.log('🔄 No valid session found, logging in with stored credentials...');
         const client = createLMSClient();
         const loginUrl = 'https://uphslms.com/login/index.php';
         const loginPage = await client.get(loginUrl);
         let $ = cheerio.load(loginPage.data);
         const logintoken = $('input[name="logintoken"]').val();
-        await client.post(loginUrl, new URLSearchParams({ username: user.lmsUsername, password: user.lmsPassword, logintoken: logintoken, anchor: '' }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Origin': 'https://uphslms.com/', 'Referer': loginUrl } });
+
+        await client.post(loginUrl, new URLSearchParams({
+          username: user.lmsUsername,
+          password: user.lmsPassword,
+          logintoken: logintoken,
+          anchor: ''
+        }), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Origin': 'https://uphslms.com/',
+            'Referer': loginUrl
+          }
+        });
+
         const dashboard = await client.get('https://uphslms.com/my/');
         if (!dashboard.data.includes('Log in')) {
           const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
           const cookieStrings = cookies.map(c => c.cookieString());
           session = { cookies: cookieStrings, timestamp: Date.now(), username: user.lmsUsername };
           userSessions.set(email, session);
-          await User.findOneAndUpdate({ email }, { lmsCookies: cookieStrings, lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), lmsLastLogin: new Date() });
+          await User.findOneAndUpdate({ email }, {
+            lmsCookies: cookieStrings,
+            lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            lmsLastLogin: new Date()
+          });
           console.log('✅ Login successful, session created');
         } else {
-          return res.status(401).json({ error: 'LMS login failed' });
+          return res.status(401).json({ error: 'LMS login failed - invalid credentials' });
         }
-      } else {
-        return res.status(401).json({ error: 'No LMS credentials found' });
       }
     }
+
+    // Now proceed with syncing courses using the validated session
     const client = createLMSClient(session.cookies);
+
+    // Also ensure session is valid before proceeding
+    const sessionValid = await ensureValidSession(email, client, user);
+    if (!sessionValid) {
+      console.log('⚠️ Session validation failed, but continuing with existing session...');
+    }
+
     const coursesResponse = await client.get('https://uphslms.com/my/courses.php');
     let $ = cheerio.load(coursesResponse.data);
     const courses = [];
+
     $('a[href*="course/view.php"]').each((i, el) => {
       const href = $(el).attr('href');
       const name = $(el).text().trim();
@@ -551,8 +593,10 @@ const syncAllCourses = async (req, res) => {
         courses.push({ id: href.split('=')[1] || i.toString(), name: name, url: href.startsWith('http') ? href : `https://uphslms.com${href}` });
       }
     });
+
     console.log(`📚 Found ${courses.length} courses to sync`);
     res.json({ success: true, message: `Syncing ${courses.length} courses...`, coursesCount: courses.length });
+
     const syncedCourses = [];
     for (let i = 0; i < courses.length; i++) {
       const course = courses[i];
@@ -565,10 +609,12 @@ const syncAllCourses = async (req, res) => {
         console.log(`❌ Failed to sync ${course.name}:`, e.message);
       }
     }
+
     const updatedUser = await User.findOne({ email });
     const stats = calculateStats(updatedUser.courses);
     updatedUser.courseStats = { ...stats, lastUpdated: new Date() };
     await updatedUser.save();
+
     console.log(`✅ Full sync completed: ${syncedCourses.length} courses synced`);
   } catch (error) {
     console.error('Sync all courses error:', error);
