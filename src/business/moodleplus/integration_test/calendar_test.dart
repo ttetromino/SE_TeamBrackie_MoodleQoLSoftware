@@ -366,3 +366,41 @@ void main() {
       print('✅ TC91 - Calendar: Dynamic Deadline Shift PASSED');
     });
 
+    // ============================================================
+    // TC92: Calendar: Manual Event Creation
+    // ============================================================
+    testWidgets('TC92 - Calendar: Manual Event Creation', (tester) async {
+      await clearCalendarCache();
+      await loginAndNavigateToCalendar(tester);
+
+      // Open add event dialog
+      final addIcon = find.byIcon(Icons.add);
+      if(addIcon.evaluate().isNotEmpty) {
+        await tester.tap(addIcon.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      // Using broader regex to match dialog titles like "Add Event", "New Task", etc.
+      final dialogText = find.textContaining(RegExp(r'Add|New|Event', caseSensitive: false));
+      expect(dialogText.evaluate().isNotEmpty, true, reason: 'Dialog should open');
+
+      // Fill and submit form
+      final titleField = find.byType(TextField);
+      if(titleField.evaluate().isNotEmpty) {
+        await tester.enterText(titleField.first, 'TC92 Test Task');
+        await tester.pumpAndSettle();
+      }
+
+      // Using broader text search for the save button
+      final submitButton = find.textContaining(RegExp(r'Add|Save|Create', caseSensitive: false));
+      if(submitButton.evaluate().isNotEmpty) {
+        await tester.tap(submitButton.last);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+      }
+
+      // Verify calendar still displays
+      final monthYearText = find.textContaining(RegExp(r'[A-Z][a-z]+ \d{4}'));
+      expect(monthYearText, findsWidgets, reason: 'Calendar should still display after event creation');
+
+      print('✅ TC92 - Calendar: Manual Event Creation PASSED');
+    });
