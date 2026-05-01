@@ -249,3 +249,30 @@ void main() {
       debugPrint('✅ TC82 - Gradebook: Text Overflow PASSED (No RenderFlex errors triggered)');
     });
 
+// ---------------------------------------------------------
+    // TC84: Gradebook - Offline Cache Persistence
+    // ---------------------------------------------------------
+    testWidgets('TC83 - Gradebook: Offline Cache', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // Let the UI finish rendering after navigation
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+
+      // 1. Verify Gradebook UI loaded
+      final hasContent = find.byType(CustomScrollView).evaluate().isNotEmpty ||
+          find.byType(SingleChildScrollView).evaluate().isNotEmpty ||
+          find.textContaining(RegExp(r'Average|Grade|Course', caseSensitive: false)).evaluate().isNotEmpty;
+
+      expect(hasContent, true, reason: 'TC83 Failed: Gradebook UI did not load any recognizable content structures');
+
+      // 2. Verify cache was written
+      final prefs = await SharedPreferences.getInstance();
+      final cachedGrades = prefs.getString('cached_grades');
+      final cachedGwa = prefs.getString('cached_gwa'); // Often apps cache the GWA separately
+
+      if (cachedGrades != null || cachedGwa != null) {
+        debugPrint('✅ TC83 - Gradebook: Offline Cache Persistence PASSED (Data found in SharedPreferences)');
+      } else {
+        fail('TC83 Failed: No cached data found in SharedPreferences after loading Gradebook');
+      }
+    });
