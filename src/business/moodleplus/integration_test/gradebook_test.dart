@@ -234,3 +234,18 @@ void main() {
         debugPrint('✅ TC81 - Gradebook: Empty State PASSED');
       }
     });
+    // ---------------------------------------------------------
+    // TC82: Gradebook - Text Overflow (Updated from your sheet)
+    // ---------------------------------------------------------
+    testWidgets('TC82 - Gradebook: Text Overflow', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // If the UI has excessively long course names that cause a RenderFlex overflow,
+      // the test will naturally crash and fail here. If it reaches this point,
+      // it means the text wrapped or truncated successfully!
+      final courseCards = find.byType(Card);
+      expect(courseCards, findsWidgets, reason: 'TC82 Failed: Gradebook UI failed to render.');
+
+      debugPrint('✅ TC82 - Gradebook: Text Overflow PASSED (No RenderFlex errors triggered)');
+    });
+
