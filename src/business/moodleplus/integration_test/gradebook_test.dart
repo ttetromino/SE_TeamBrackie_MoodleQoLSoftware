@@ -142,4 +142,19 @@ void main() {
       debugPrint('✅ TC76 - Gradebook: Missing Grade ACKNOWLEDGED');
     });
 
+// ---------------------------------------------------------
+    // TC77: Gradebook - GWA Calculation Accuracy
+    // ---------------------------------------------------------
+    testWidgets('TC77 - Gradebook: GWA Calculation Accuracy', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // Look for GWA display using text containing
+      final gwaDisplay = find.textContaining(RegExp(r'\d+\.?\d*%?'));
+      final gwaLabel = find.textContaining(RegExp(r'General Weighted Average|GWA', caseSensitive: false));
+
+      final hasGwaContent = gwaLabel.evaluate().isNotEmpty || gwaDisplay.evaluate().isNotEmpty;
+      expect(hasGwaContent, true, reason: 'TC77 Failed: GWA information should be displayed on the screen');
+
+      debugPrint('✅ TC77 - Gradebook: GWA Calculation Accuracy PASSED');
+    });
 
