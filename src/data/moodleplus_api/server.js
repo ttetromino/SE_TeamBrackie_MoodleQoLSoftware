@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const connectDB = require('./config/db');
 const { startSessionCleanup } = require('./utils/sessionStore');
+const User = require('./models/User');  // ADD THIS LINE
 
 const {
   signup,
@@ -75,6 +76,19 @@ const {
   saveNotificationPreference,
   getNotificationPreference
 } = require('./controllers/notificationController');
+
+const { requireAdmin } = require('./middleware/adminAuth');
+const {
+  getScraperStatus,
+  getStorageStats,
+  getAllUsers,
+  getUserDetails,
+  getUserCourses,
+  getUserBacklog,
+  forceUserSync,
+  removeUser
+} = require('./controllers/adminController');
+
 
 const app = express();
 app.use(express.json());
@@ -150,6 +164,52 @@ app.get('/api/notifications/pending/:email', getPendingNotifications);
 app.post('/api/notifications/mark-sent', markNotificationSent);
 app.get('/api/notifications/preference/:email', getNotificationPreference);
 app.post('/api/notifications/preference', saveNotificationPreference);
+
+// ============================================
+// US-12: ADMIN ROUTES
+// ============================================
+
+// Admin authorization check (for verifying admin status)
+app.get('/api/admin/verify/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.json({ success: false, isAdmin: false });
+    }
+
+    console.log(`🔐 Admin verify for ${email}: role=${user.role}`);
+
+    res.json({
+      success: true,
+      isAdmin: user.role === 'admin',
+      role: user.role
+    });
+  } catch (error) {
+    console.error('Admin verify error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// All routes below require admin role
+app.use('/api/admin', requireAdmin);
+
+// Scraper health & connectivity
+app.get('/api/admin/scraper-status', getScraperStatus);
+
+// Storage statistics
+app.get('/api/admin/storage-stats', getStorageStats);
+
+// User management
+app.get('/api/admin/users', getAllUsers);
+app.get('/api/admin/users/:email', getUserDetails);
+app.get('/api/admin/users/:email/courses', getUserCourses);
+app.get('/api/admin/users/:email/backlog', getUserBacklog);
+
+// Admin actions
+app.post('/api/admin/force-sync', forceUserSync);
+app.delete('/api/admin/users', removeUser);
 
 // Test route
 app.get('/', (req, res) => {
