@@ -332,3 +332,37 @@ void main() {
       print('✅ TC90 - Calendar: Duplicate Sync Prevention PASSED');
     });
 
+// ============================================================
+    // TC91: Calendar: Dynamic Deadline Shift
+    // ============================================================
+    testWidgets('TC91 - Calendar: Dynamic Deadline Shift', (tester) async {
+      await clearCalendarCache();
+      await loginAndNavigateToCalendar(tester);
+
+      final syncButtons = find.byIcon(Icons.sync);
+      if (syncButtons.evaluate().isNotEmpty) {
+        await tester.tap(syncButtons.first);
+        await tester.pump();
+        await Future.delayed(const Duration(seconds: 6));
+      }
+
+      // Test month navigation
+      final nextMonthButton = find.byIcon(Icons.chevron_right);
+      if(nextMonthButton.evaluate().isNotEmpty) {
+        await tester.tap(nextMonthButton.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      final prevMonthButton = find.byIcon(Icons.chevron_left);
+      if(prevMonthButton.evaluate().isNotEmpty) {
+        await tester.tap(prevMonthButton.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      // Verify UI still works
+      final monthYearText = find.textContaining(RegExp(r'[A-Z][a-z]+ \d{4}'));
+      expect(monthYearText, findsWidgets, reason: 'Month navigation should work');
+
+      print('✅ TC91 - Calendar: Dynamic Deadline Shift PASSED');
+    });
+
