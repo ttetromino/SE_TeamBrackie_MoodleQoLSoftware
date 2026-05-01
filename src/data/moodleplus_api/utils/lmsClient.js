@@ -76,6 +76,7 @@ const ensureValidSession = async (userId, client, user) => {
           const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
           const cookieStrings = cookies.map(c => c.cookieString());
           
+          const { userSessions } = require('./sessionStore');
           userSessions.set(userId, {
             cookies: cookieStrings,
             timestamp: Date.now(),
