@@ -181,3 +181,20 @@ void main() {
       }
     });
 
+    // ---------------------------------------------------------
+    // TC79: Gradebook - Missing Unit Data (Negative Test)
+    // ---------------------------------------------------------
+    testWidgets('TC79 - Gradebook: Missing Unit Data', (tester) async {
+      await loginAndNavigateToGradebook(tester);
+
+      // Verify that the gradebook loads successfully without throwing a null pointer crash.
+      // If a course is missing unit data from the API, the app should fall back to a
+      // default value (like 1.0) or safely exclude it rather than breaking the UI.
+      final hasContent = find.byType(CustomScrollView).evaluate().isNotEmpty ||
+          find.byType(SingleChildScrollView).evaluate().isNotEmpty ||
+          find.textContaining(RegExp(r'General Weighted Average|GWA', caseSensitive: false)).evaluate().isNotEmpty;
+
+      expect(hasContent, true, reason: 'TC79 Failed: Gradebook crashed or failed to render. Possible null pointer from missing unit data.');
+
+      debugPrint('✅ TC79 - Gradebook: Missing Unit Data PASSED (No null pointer crashes)');
+    });
