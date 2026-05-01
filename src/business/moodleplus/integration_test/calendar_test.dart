@@ -404,3 +404,29 @@ void main() {
 
       print('✅ TC92 - Calendar: Manual Event Creation PASSED');
     });
+
+    // ============================================================
+    // TC93: Calendar: Invalid Form Input - Validation
+    // ============================================================
+    testWidgets('TC93 - Calendar: Invalid Form Input - Validation', (tester) async {
+      await loginAndNavigateToCalendar(tester);
+
+      final addIcon = find.byIcon(Icons.add);
+      if(addIcon.evaluate().isNotEmpty) {
+        await tester.tap(addIcon.first);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      // Try to submit empty form
+      final submitButton = find.textContaining(RegExp(r'Add|Save|Create', caseSensitive: false));
+      if(submitButton.evaluate().isNotEmpty) {
+        await tester.tap(submitButton.last);
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+
+      // Dialog should still be open due to validation
+      final titleField = find.byType(TextField);
+      expect(titleField, findsWidgets, reason: 'Dialog should remain open when form is invalid');
+
+      print('✅ TC93 - Calendar: Invalid Form Input PASSED');
+    });
