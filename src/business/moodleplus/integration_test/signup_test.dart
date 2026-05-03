@@ -44,7 +44,7 @@ void main() {
         await goToSignupPage(tester);
 
         final String uniqueEmail = 'test_${DateTime.now().millisecondsSinceEpoch}@gmail.com';
-        await attemptSignup(tester, name: 'Wilmar Lipata', email: uniqueEmail, password: '123', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
+        await attemptSignup(tester, name: 'Wilmar Lipata', email: uniqueEmail, password: 'wilmartest', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
         await tester.pumpAndSettle(const Duration(seconds: 1));
         expect(find.textContaining('successful'), findsWidgets);
         debugPrint('TC1 - SignUp: Clean Pass - PASSED ✅');
@@ -57,7 +57,7 @@ void main() {
     testWidgets('TC2 - No Name', (tester) async {
       try {
         await goToSignupPage(tester);
-        await attemptSignup(tester, name: '', email: 'test@gmail.com', password: '123', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
+        await attemptSignup(tester, name: '', email: 'test@gmail.com', password: 'wilmartest', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
         expect(find.textContaining('required'), findsOneWidget);
         debugPrint('TC2 - SignUp: No Name - PASSED ✅');
       } catch (e) {
@@ -69,7 +69,7 @@ void main() {
     testWidgets('TC3 - No Email', (tester) async {
       try {
         await goToSignupPage(tester);
-        await attemptSignup(tester, name: 'Wilmar', email: '', password: '123', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
+        await attemptSignup(tester, name: 'Wilmar', email: '', password: 'wilmartest', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
         expect(find.textContaining('required'), findsOneWidget);
         debugPrint('TC3 - SignUp: No Email - PASSED ✅');
       } catch (e) {
@@ -105,7 +105,7 @@ void main() {
     testWidgets('TC6 - Incorrect LMS Username', (tester) async {
       try {
         await goToSignupPage(tester);
-        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'test2@gmail.com', password: '123', lmsUser: 'wronguser', lmsPass: 'wilmarUPHSL_020505');
+        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'test2@gmail.com', password: 'wilmartest', lmsUser: 'wronguser', lmsPass: 'wilmarUPHSL_020505');
         await tester.pumpAndSettle(const Duration(seconds: 1));
         expect(find.textContaining('failed'), findsWidgets);
         debugPrint('TC6 - SignUp: Incorrect LMS Username - PASSED ✅');
@@ -118,7 +118,7 @@ void main() {
     testWidgets('TC7 - Incorrect LMS Password', (tester) async {
       try {
         await goToSignupPage(tester);
-        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'test3@gmail.com', password: '123', lmsUser: 'c23-2167-787', lmsPass: 'wrongpw');
+        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'test3@gmail.com', password: 'wilmartest', lmsUser: 'c23-2167-787', lmsPass: 'wrongpw');
         await tester.pumpAndSettle(const Duration(seconds: 1));
         expect(find.textContaining('failed'), findsWidgets);
         debugPrint('TC7 - SignUp: Incorrect LMS Password - PASSED ✅');
@@ -133,7 +133,7 @@ void main() {
         await goToSignupPage(tester);
 
         // Attempting to sign up with an invalid email missing the '@' symbol
-        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'invalidEmail', password: '123', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
+        await attemptSignup(tester, name: 'Wilmar Lipata', email: 'invalidEmail', password: 'wilmartest', lmsUser: 'c23-2167-787', lmsPass: 'wilmarUPHSL_020505');
         await tester.pumpAndSettle(const Duration(seconds: 2));
 
         // FIX: As noted in your manual QA, the system currently has a bug and ACCEPTS invalid emails.

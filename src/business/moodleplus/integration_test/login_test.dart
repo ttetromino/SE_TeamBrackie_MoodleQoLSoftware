@@ -46,17 +46,16 @@ void main() {
       final emailField = find.byType(TextField).first;
       final passField = find.byType(TextField).last;
 
-      // The login button is usually an ElevatedButton containing the text 'Log In'
       final loginButtonFinder = find.widgetWithText(ElevatedButton, 'Log In');
       final loginButton = loginButtonFinder.evaluate().isNotEmpty
           ? loginButtonFinder.first
           : find.byType(ElevatedButton).first;
 
       // 2. Enter verified email
-      await tester.enterText(emailField, 'wilmartest@gmail.com');
+      await tester.enterText(emailField, 'wilmartest1@gmail.com');
 
       // 3. Enter verified password
-      await tester.enterText(passField, '123');
+      await tester.enterText(passField, 'wilmartest');
       await tester.testTextInput.receiveAction(TextInputAction.done);
 
       // 4. Click Log In
@@ -68,7 +67,6 @@ void main() {
       for (int i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 500));
 
-        // Check for Dashboard indicators (Bottom Nav, 'My Courses' text, etc.)
         if (find.text('My Courses').evaluate().isNotEmpty ||
             find.byType(BottomNavigationBar).evaluate().isNotEmpty) {
           dashboardAppeared = true;
@@ -77,6 +75,15 @@ void main() {
       }
 
       expect(dashboardAppeared, true, reason: 'TC13 Failed: Did not redirect to Dashboard after valid login.');
+
+      // THE FIX: The Cool-Down Period
+      // Keep the test alive long enough for the app's background LMS sync to finish.
+      // This prevents the "setState after dispose" crash when we cannot modify the app code.
+      debugPrint('⏳ Waiting for background LMS sync to complete...');
+      await tester.pump();
+      await Future.delayed(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
       debugPrint('✅ TC13 - Login: Happy Path PASSED');
     });
 

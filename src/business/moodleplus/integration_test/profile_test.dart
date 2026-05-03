@@ -1,5 +1,3 @@
-// integration_test/profile_test.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -208,35 +206,124 @@ void main() {
         await openEditScreen(tester);
 
         final textFields = tester.widgetList<TextField>(find.byType(TextField)).toList();
-        await tester.enterText(find.byType(TextField).at(textFields.length - 2), tempPass);
-        await tester.enterText(find.byType(TextField).last, tempPass);
-        if (textFields.length >= 4) await tester.enterText(find.byType(TextField).at(1), basePassword);
 
-        final saveButton = find.textContaining(RegExp(r'Save|Update', caseSensitive: false));
-        await tester.tap(saveButton.first);
-        await tester.pump();
-        await Future.delayed(const Duration(seconds: 4));
+        if (textFields.length < 3) {
+          fail('TC48 Failed: Could not find enough text fields on the edit screen to change the password.');
+        }
+
+        // 1. Safely target the password fields counting from the bottom
+        final newPassField = find.byType(TextField).at(textFields.length - 3);
+        final confirmPassField = find.byType(TextField).at(textFields.length - 2);
+        final currentPassField = find.byType(TextField).last;
+
+        await tester.enterText(newPassField, tempPass);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+
+        await tester.enterText(confirmPassField, tempPass);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+
+        await tester.enterText(currentPassField, basePassword);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
+
+        // 2. Strict button finder
+        final saveButtonFinder = find.descendant(
+          of: find.byType(ElevatedButton),
+          matching: find.textContaining(RegExp(r'Save|Update', caseSensitive: false)),
+        );
+
+        if (saveButtonFinder.evaluate().isEmpty) {
+          fail('TC48 Failed: Could not locate an ElevatedButton with text "Save" or "Update".');
+        }
+
+        // Ensure visible and tap
+        await tester.ensureVisible(saveButtonFinder.first);
+        await tester.tap(saveButtonFinder.first);
+
+        // 3. Wait for the popup and click it
+        bool foundPopup = false;
+        for (int i = 0; i < 50; i++) {
+          await tester.pump(const Duration(milliseconds: 200));
+
+          final successPopup = find.textContaining(RegExp(r'Success|Updated|Saved|Changed', caseSensitive: false));
+          if (successPopup.evaluate().isNotEmpty) {
+            foundPopup = true;
+
+            final dismissButton = find.textContaining(RegExp(r'OK|Close|Got it|Done|Dismiss|Continue', caseSensitive: false));
+            if (dismissButton.evaluate().isNotEmpty) {
+              await tester.tap(dismissButton.first);
+            } else {
+              await tester.tap(successPopup.first);
+            }
+
+            await tester.pumpAndSettle(const Duration(seconds: 2));
+            break;
+          }
+        }
+
+        if (!foundPopup) {
+          fail('TC48 Failed: Success pop-up did not appear, could not click it to proceed.');
+        }
+
         isDirty = true;
 
+        // 4. Return to Main Profile Tab
+        final backButton = find.byTooltip('Back');
+        final profileNavIcon = find.byIcon(Icons.person);
+
+        if (backButton.evaluate().isNotEmpty) {
+          await tester.tap(backButton.first);
+        } else if (profileNavIcon.evaluate().isNotEmpty) {
+          await tester.tap(profileNavIcon.first);
+        } else {
+          final dynamic widgetsAppState = tester.state(find.byType(WidgetsApp));
+          await widgetsAppState.didPopRoute();
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        // 5. Logout
         await performLogout(tester);
 
-        // Login with new pass
-        await tester.enterText(find.byType(TextField).first, baseEmail);
-        await tester.enterText(find.byType(TextField).last, tempPass);
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Log In').first);
+        // Wait for the Login screen to fully render before trying to type
+        bool loginScreenReady = false;
+        for (int i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 500));
+          if (find.byType(TextField).evaluate().length >= 2) {
+            loginScreenReady = true;
+            break;
+          }
+        }
 
+        if (!loginScreenReady) {
+          fail('TC48 Failed: Did not navigate to Login screen after logout.');
+        }
+
+        // 6. Try logging in with the NEW tempPass
+        final emailField = find.byType(TextField).first;
+        final passField = find.byType(TextField).last;
+        final loginBtn = find.textContaining(RegExp(r'Log In|Login', caseSensitive: false)).last;
+
+        await tester.enterText(emailField, baseEmail);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+
+        await tester.enterText(passField, tempPass); // USING THE NEW PASSWORD
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+
+        await tester.tap(loginBtn);
+
+        // 7. Verify we successfully logged in
         bool success = false;
         for (int i = 0; i < 40; i++) {
           await tester.pump();
           await Future.delayed(const Duration(milliseconds: 500));
-          if (find.byIcon(Icons.person).evaluate().isNotEmpty) {
+          if (find.byIcon(Icons.person).evaluate().isNotEmpty || find.text('My Courses').evaluate().isNotEmpty) {
             success = true;
             break;
           }
         }
         expect(success, true, reason: 'TC48 Failed: Could not log in with new password.');
         debugPrint('✅ TC48 PASSED');
+
       } finally {
         if (isDirty) await emergencyRevert(tester, baseEmail, tempPass);
       }

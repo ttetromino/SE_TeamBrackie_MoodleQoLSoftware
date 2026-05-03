@@ -52,7 +52,7 @@ void main() {
           : find.byType(ElevatedButton).first;
 
       await tester.enterText(emailField, 'wilmartest1@gmail.com');
-      await tester.enterText(passField, '123');
+      await tester.enterText(passField, 'wilmartest');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.tap(loginButton);
 
