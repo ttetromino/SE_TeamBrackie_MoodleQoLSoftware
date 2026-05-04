@@ -1,9 +1,10 @@
 // lib/services/admin_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import '../config/api_config.dart';
 class AdminService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Check if user is admin
   Future<bool> isAdmin(String email) async {

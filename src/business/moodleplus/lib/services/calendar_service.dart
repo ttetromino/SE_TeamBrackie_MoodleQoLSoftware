@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/calendar_event_model.dart';
-
+import '../config/api_config.dart';
 class CalendarService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
   static const String cachedEventsKey = 'cached_calendar_events';
   static const String personalEventsKey = 'personal_calendar_events';
   static const String lastSyncKey = 'calendar_last_sync';
