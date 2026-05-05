@@ -5,7 +5,18 @@
 - Improve Moodle usability and quality of life features  
 - Enable offline access to previously loaded academic data  
 - Ensure user data privacy through encrypted local storage  
-- Follow clean architecture and proper documentation standards  
+- Follow clean architecture and proper documentation standards
+
+## ⚙️ System Requirements
+
+### Minimum Requirements
+- Device: Android Smartphone  
+- OS: Android 8.0 (Oreo) or higher  
+- RAM: 3GB minimum  
+- Storage: 150MB free space  
+
+### Supported Platforms
+- Android (APK Installation)  
 
 ## Features of the Program
 * **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
