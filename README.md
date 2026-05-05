@@ -1,11 +1,11 @@
 # MoodlePlus
-**Moodle+** is a web extension + local app to enhance the Moodle LMS experience by providing task planning, and encrypted local data storage productivity and well-being of students, it addresses Moodle LMS limitations such as slow server response.
+**Moodle+** is a mobile application (APK) designed to enhance the Moodle LMS experience by providing task planning, offline access, and secure local data storage. It improves student productivity and addresses common Moodle limitations such as slow server response and lack of offline functionality.
 
-## Objectives
-- Improve Moodle usability and quality of life features
-- Enable offline access to previously loaded data
-- Ensure user data privacy through local encrypted storage
-- Follow clean architecture and documentation standards
+## 📌 Objectives
+- Improve Moodle usability and quality of life features  
+- Enable offline access to previously loaded academic data  
+- Ensure user data privacy through encrypted local storage  
+- Follow clean architecture and proper documentation standards  
 
 ## Features of the Program
 * **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
