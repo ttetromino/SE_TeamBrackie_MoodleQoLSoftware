@@ -16,7 +16,60 @@
 - Storage: 150MB free space  
 
 ### Supported Platforms
-- Android (APK Installation)  
+- Android (APK Installation)
+
+## 🔑 Prerequisites
+Before using Moodle+, you must have:
+- An active **Moodle account** (e.g., UPHSL Moodle)  
+- Internet connection (required for first-time login and data synchronization)
+
+## 📥 Installation Guide (APK)
+
+### Step 1: Download the APK
+- Open the Google Drive link:  
+  https://drive.google.com/file/d/1jtb6bDSBIH8yBBkZP60irOmozBmeJ0Pz/view  
+- Tap **Download**  
+- If a warning appears, tap **"Download anyway"**
+
+### Step 2: Allow Installation from Unknown Sources
+> Android blocks apps outside the Play Store by default.
+
+- Go to **Settings**  
+- Navigate to:  
+  **Apps → Special App Access → Install Unknown Apps**  
+- Select the app you used to download the APK (e.g., Chrome or File Manager)  
+- Enable **"Allow from this source"**
+
+### Step 3: Install the APK
+- Open your **Downloads** folder  
+- Tap the downloaded `.apk` file  
+- Tap **Install**  
+- Wait for installation to complete  
+
+### Step 4: Launch the App
+- Tap **Open** after installation  
+  OR  
+- Find **Moodle+** in your app drawer  
+
+### ⚠️ Important Notes
+- Only install APK files from trusted sources  
+- You may disable "Allow from this source" after installation for better security 
+
+## ▶️ How to Use the Program
+
+### 1. Login
+- Open the app  
+- Enter your Moodle credentials  
+- Complete authentication if required  
+
+### 2. Dashboard
+- View enrolled courses  
+- Navigate through academic tools using the mobile interface  
+
+### 3. Core Features
+- **Gradebook** → View and track grades  
+- **Calendar** → Monitor deadlines and schedules  
+- **Backlog** → Manage tasks and requirements  
 
 ## Features of the Program
 * **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
