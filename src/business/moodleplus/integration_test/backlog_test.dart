@@ -73,6 +73,38 @@ void main() {
       }
     });
 
+
+    testWidgets('TC33 - Backlog: Empty List State (Edge Case)', (tester) async {
+      try {
+        await loginAndNavigateToBacklog(tester);
+
+        // FIX: Use the icon instead of text 'Filter'
+        await tester.tap(find.byIcon(Icons.filter_list));
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+
+        // Use a filter that you know will yield 0 results (like Completed or No Deadline)
+        final filterOption = find.text('Completed');
+        if (filterOption.evaluate().isNotEmpty) {
+          await tester.tap(filterOption);
+        }
+
+        final applyBtn = find.widgetWithText(ElevatedButton, 'Apply Filters');
+        if (applyBtn.evaluate().isNotEmpty) {
+          await tester.tap(applyBtn);
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+
+        final emptyStateMessage = find.textContaining(RegExp('no.*found|all caught up', caseSensitive: false));
+        expect(emptyStateMessage, findsOneWidget, reason: "Empty state message did not appear when 0 tasks matched the filter");
+
+        debugPrint('✅ TC33 PASSED');
+      } catch (e) {
+        debugPrint('❌ TC33 FAILED: $e');
+        rethrow;
+      }
+    });
+
+
     testWidgets('TC23 - Backlog: Layout Toggle (Compact vs Expanded)', (tester) async {
       try {
         await loginAndNavigateToBacklog(tester);
@@ -408,35 +440,7 @@ void main() {
       }
     });
 
-    testWidgets('TC33 - Backlog: Empty List State (Edge Case)', (tester) async {
-      try {
-        await loginAndNavigateToBacklog(tester);
 
-        // FIX: Use the icon instead of text 'Filter'
-        await tester.tap(find.byIcon(Icons.filter_list));
-        await tester.pumpAndSettle(const Duration(seconds: 1));
-
-        // Use a filter that you know will yield 0 results (like Completed or No Deadline)
-        final filterOption = find.text('Completed');
-        if (filterOption.evaluate().isNotEmpty) {
-          await tester.tap(filterOption);
-        }
-
-        final applyBtn = find.widgetWithText(ElevatedButton, 'Apply Filters');
-        if (applyBtn.evaluate().isNotEmpty) {
-          await tester.tap(applyBtn);
-        }
-        await tester.pumpAndSettle(const Duration(seconds: 2));
-
-        final emptyStateMessage = find.textContaining(RegExp('no.*found|all caught up', caseSensitive: false));
-        expect(emptyStateMessage, findsOneWidget, reason: "Empty state message did not appear when 0 tasks matched the filter");
-
-        debugPrint('✅ TC33 PASSED');
-      } catch (e) {
-        debugPrint('❌ TC33 FAILED: $e');
-        rethrow;
-      }
-    });
 
   });
 }

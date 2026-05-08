@@ -11,6 +11,7 @@ import 'calendar_test.dart' as calendar;
 import 'gradebook_test.dart' as gradebook;
 import 'progresstracker_test.dart' as progresstracker;
 import 'archive_test.dart' as archive;
+import 'admin_test.dart' as admin;
 
 void main() {
   // Initialize the binding exactly once for the entire suite
@@ -19,21 +20,22 @@ void main() {
   // Run all test files in a logical sequence
   group('Full MoodlePlus Integration Suite', () {
 
-    // 1. Authentication & Onboarding
+
     signup.main();
     login.main();
+    progresstracker.main();
 
-    // 2. Core User Features
+
     profile.main();
 
-    // 3. Primary Academic Tools
+
     backlog.main();
+
     calendar.main();
     gradebook.main();
 
-    // 4. Secondary/Long-Term Features
-    progresstracker.main();
     archive.main();
+    admin.main();
 
   });
 }

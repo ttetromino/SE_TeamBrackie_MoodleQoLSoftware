@@ -64,39 +64,111 @@ void main() {
     }
   }
 
-  // Helper 4: Login
+  // Helper 4: Ultra-Aggressive Smart Login (Handles Auto-Login and Manual Login)
   Future<void> login(WidgetTester tester, String email, String password) async {
     app.main();
-    await tester.pumpAndSettle(const Duration(seconds: 4));
 
-    final emailFields = find.byType(TextField);
-    if (emailFields.evaluate().isNotEmpty) {
-      await tester.enterText(emailFields.at(0), email);
-      await tester.enterText(emailFields.at(1), password);
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+    bool needsManualLogin = true;
+    bool isReady = false;
 
-      final loginBtn = find.widgetWithText(ElevatedButton, 'Log In');
-      if (loginBtn.evaluate().isNotEmpty) {
-        await tester.tap(loginBtn.first);
-      } else {
-        await tester.tap(find.textContaining(RegExp(r'log in|login', caseSensitive: false)).first);
+    // 1. Wait to see where the app lands
+    for (int i = 0; i < 20; i++) {
+      await tester.pump();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (find.text('My Courses').evaluate().isNotEmpty || find.byIcon(Icons.person).evaluate().isNotEmpty) {
+        isReady = true;
+        needsManualLogin = false;
+        debugPrint('🔓 Auto-login detected. Skipping manual credential entry.');
+        break;
+      }
+
+      if (find.byType(TextField).evaluate().length >= 2) {
+        isReady = true;
+        needsManualLogin = true;
+        break;
       }
     }
-    await tester.pumpAndSettle(const Duration(seconds: 4));
+
+    if (!isReady) fail('❌ App stuck on splash screen.');
+
+    // 2. Perform manual login
+    if (needsManualLogin) {
+      debugPrint('🔑 Performing manual login...');
+
+      // Target the text fields specifically
+      final allTextFields = find.byType(TextField);
+      await tester.enterText(allTextFields.first, email);
+      // Fallback to .at(1) in case .last targets a hidden field
+      await tester.enterText(allTextFields.at(1), password);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      // THE CRITICAL FIX: Ultra-Aggressive Button Targeting
+      final loginTarget = find.textContaining(RegExp(r'^log in$|^login$|^sign in$', caseSensitive: false));
+
+      if (loginTarget.evaluate().isNotEmpty) {
+        debugPrint('👆 Found login button text, tapping...');
+        await tester.ensureVisible(loginTarget.last);
+        await tester.tap(loginTarget.last, warnIfMissed: false);
+      } else {
+        debugPrint('⚠️ Login text not found, tapping fallback ElevatedButton...');
+        await tester.tap(find.byType(ElevatedButton).first, warnIfMissed: false);
+      }
+
+      // Wait for the Dashboard to appear
+      bool dashboardLoaded = false;
+      for (int i = 0; i < 40; i++) {
+        await tester.pump();
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (find.text('My Courses').evaluate().isNotEmpty || find.byIcon(Icons.person).evaluate().isNotEmpty) {
+          dashboardLoaded = true;
+          break;
+        }
+      }
+
+      if (!dashboardLoaded) {
+        final errorMsg = find.textContaining(RegExp(r'invalid|wrong|error', caseSensitive: false));
+        if (errorMsg.evaluate().isNotEmpty) {
+          fail('❌ Login failed: App displayed an error message for $email.');
+        } else {
+          fail('❌ Login timed out. Dashboard never loaded after tapping Log In.');
+        }
+      }
+    }
+
+    await tester.pumpAndSettle();
   }
 
-  // Helper 5: Safe Tab Navigation
+  // Helper 5: Safe Tab Navigation (With Fallback)
   Future<void> safeTabNavigate(WidgetTester tester, String tabName) async {
-    final tab = find.textContaining(tabName);
-    expect(tab, findsWidgets, reason: 'Tab $tabName not found on screen.');
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
-    await tester.tap(tab.first);
+    final tabTextFinder = find.textContaining(tabName);
+
+    if (tabTextFinder.evaluate().isNotEmpty) {
+      await tester.tap(tabTextFinder.first);
+    } else {
+      // Fallback to icons if text is hidden
+      final bottomNavItems = find.byType(BottomNavigationBarItem);
+      if (bottomNavItems.evaluate().isNotEmpty) {
+        if (tabName.contains('Courses')) {
+          await tester.tap(find.byType(Icon).first);
+        } else if (tabName.contains('Backlog')) {
+          await tester.tap(find.byType(Icon).at(1));
+        }
+      } else {
+        fail('Tab "$tabName" not found on screen.');
+      }
+    }
     await tester.pumpAndSettle(const Duration(seconds: 2));
   }
 
   // Helper 6: Handle LMS Disconnects and Syncing
   Future<void> ensureLmsConnectedAndLoaded(WidgetTester tester, String lmsPassword) async {
     await safeTabNavigate(tester, 'My Courses');
+    await tester.pump(const Duration(seconds: 2));
 
     // Handle Manual Login if Auto-Login Failed
     final manualLoginBtn = find.widgetWithText(ElevatedButton, 'Login to LMS');
@@ -131,66 +203,101 @@ void main() {
 
   group('MoodlePlus - Progress Tracker Integration Tests', () {
 
+
+
     testWidgets('TC35 - Progress: Happy Path (Task Completion)', (tester) async {
-      await login(tester, 'wilmartest2@gmail.com', 'wilmartest');
+      await login(tester, 'wilmartest1@gmail.com', 'wilmartest');
       await ensureLmsConnectedAndLoaded(tester, 'wilmarUPHSL_020505');
 
-      // 1. Memorize the starting percentage
       String initialPercentage = getCurrentPercentage(tester);
       debugPrint('📊 Starting Percentage: $initialPercentage');
 
-      // 2. Navigate to Backlog
       await safeTabNavigate(tester, 'Backlog');
 
-      // Wait for tasks to populate
-      await tester.pumpAndSettle(const Duration(seconds: 3));
-
-      // 3. Look for available checkboxes
-      final checkboxes = find.byType(Checkbox);
-
-      // THE FIX: Graceful exit if the database is empty
-      if (checkboxes.evaluate().isEmpty) {
-        debugPrint('⚠️ TC35 Note: No active checkboxes found. Task list is empty or fully completed for this account.');
-        debugPrint('✅ TC35 - Progress: Happy Path ACKNOWLEDGED');
-        return; // Exit the test safely without failing
+      debugPrint('⏳ Waiting for Backlog data to sync and unlock...');
+      for (int i = 0; i < 5; i++) {
+        await tester.pump(const Duration(seconds: 1));
       }
 
-      // Target the unchecked boxes
-      final uncheckedBoxes = find.byWidgetPredicate((widget) => widget is Checkbox && widget.value == false);
+      final allCheckboxes = find.byType(Checkbox);
 
-      if (uncheckedBoxes.evaluate().isEmpty) {
-        debugPrint('⚠️ TC35 Note: All tasks are already completed. Cannot verify progress increment.');
+      if (allCheckboxes.evaluate().isEmpty) {
+        debugPrint('⚠️ TC35 Note: No active checkboxes found. Task list is empty.');
         debugPrint('✅ TC35 - Progress: Happy Path ACKNOWLEDGED');
-        return; // Exit the test safely
+        return;
       }
 
-      // 4. Check off up to 3 tasks
-      int tasksToComplete = uncheckedBoxes.evaluate().length > 3 ? 3 : uncheckedBoxes.evaluate().length;
+      int completedCount = 0;
 
-      for (int i = 0; i < tasksToComplete; i++) {
-        debugPrint('✅ Checking off task ${i + 1}...');
-        // Always tap the first available unchecked box
-        final nextBox = find.byWidgetPredicate((widget) => widget is Checkbox && widget.value == false);
-        if (nextBox.evaluate().isNotEmpty) {
-          await tester.ensureVisible(nextBox.first);
-          await tester.tap(nextBox.first);
+      // THE FIX: Increased task limit to 5
+      for (int i = 0; i < 5; i++) {
+        await tester.pumpAndSettle();
+
+        Finder? targetCheckbox;
+        final currentCheckboxes = find.byType(Checkbox);
+
+        // Iterate through checkboxes by pairs. The right one is odd-indexed (1, 3, 5).
+        for (int index = 1; index < currentCheckboxes.evaluate().length; index += 2) {
+          final finder = currentCheckboxes.at(index);
+          final checkbox = tester.widget<Checkbox>(finder);
+
+          if (checkbox.value == false) {
+            targetCheckbox = finder;
+            break;
+          }
+        }
+
+        if (targetCheckbox != null) {
+          debugPrint('✅ Tapping right-side completion checkbox for task ${completedCount + 1}...');
+          await tester.ensureVisible(targetCheckbox);
+          await tester.pumpAndSettle();
+
+          // Tap the right-side checkbox directly
+          await tester.tap(targetCheckbox, warnIfMissed: false);
+
+          // THE FIX: Wait for and click the confirmation modal
           await tester.pumpAndSettle(const Duration(seconds: 1));
+          debugPrint('💬 Looking for confirmation button...');
+
+          // Flexible finder catches common confirmation texts
+          final confirmBtn = find.textContaining(RegExp(r'confirm|yes|complete|ok|continue', caseSensitive: false));
+
+          if (confirmBtn.evaluate().isNotEmpty) {
+            await tester.tap(confirmBtn.last, warnIfMissed: false);
+            debugPrint('👆 Clicked confirmation!');
+          } else {
+            debugPrint('⚠️ No confirmation modal appeared, proceeding...');
+          }
+
+          debugPrint('⏳ Waiting for backend to process completion...');
+          for (int w = 0; w < 3; w++) {
+            await tester.pump(const Duration(seconds: 1));
+          }
+
+          completedCount++;
+
+        } else {
+          debugPrint('⚠️ No more unchecked completion checkboxes found. Stopped at $completedCount.');
+          break; // Exit loop if no more tasks are available
         }
       }
 
-      // 5. Navigate back to My Courses
+      if (completedCount == 0) {
+        debugPrint('⚠️ TC35 Note: All tasks are already completed. Cannot verify progress increment.');
+        debugPrint('✅ TC35 - Progress: Happy Path ACKNOWLEDGED');
+        return;
+      }
+
       debugPrint('🔙 Navigating back to My Courses...');
       await safeTabNavigate(tester, 'My Courses');
 
-      // 6. Wait for the percentage to change
       debugPrint('⏳ Waiting for UI to sync new percentage...');
       await waitForPercentageChange(tester, initialPercentage);
 
-      // 7. Verify the UI updated
       String newPercentage = getCurrentPercentage(tester);
       debugPrint('📈 New Percentage: $newPercentage');
 
-      expect(newPercentage, isNot(equals(initialPercentage)), reason: 'The percentage did not update after completing tasks!');
+      expect(newPercentage, isNot(equals(initialPercentage)), reason: 'The percentage did not update after completing $completedCount tasks!');
       expect(newPercentage, isNot(equals("Not Found")), reason: 'Could not find the percentage text on the screen.');
 
       debugPrint('✅ TC35 PASSED');
@@ -239,6 +346,8 @@ void main() {
       expect(hasGradient, isTrue, reason: 'TC37 Failed: No LinearGradient found on the progress bar');
       debugPrint('✅ TC37 PASSED');
     });
+
+
 
     testWidgets('TC38 - Progress: Container Style', (tester) async {
       await login(tester, 'wilmartest1@gmail.com', 'wilmartest');
