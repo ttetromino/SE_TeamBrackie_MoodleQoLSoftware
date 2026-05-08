@@ -19,7 +19,7 @@ import 'services/notification_service.dart';
 import 'services/backlog_service.dart';
 import 'services/admin_service.dart';
 import 'admin_dashboard_page.dart';
-import '../config/api_config.dart';
+import 'config/api_config.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;

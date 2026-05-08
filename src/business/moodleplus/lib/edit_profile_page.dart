@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config/api_config.dart';
+import 'config/api_config.dart';
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic> user;
   final Function(Map<String, dynamic>) onProfileUpdated;
