@@ -69,7 +69,49 @@ Before using Moodle+, you must have:
 ### 3. Core Features
 - **Gradebook** → View and track grades  
 - **Calendar** → Monitor deadlines and schedules  
-- **Backlog** → Manage tasks and requirements  
+- **Backlog** → Manage tasks and requirements
+
+## Visual Guide (Core Workflows)
+
+### Login Screen
+Shows user authentication using Moodle credentials.
+
+![Login Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Login.jpg)
+
+---
+
+### Sign Up Screen
+Allows new users to create an account and initialize local storage.
+
+![Signup Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Signup.jpg)
+
+---
+
+### Dashboard Overview
+Displays enrolled courses and quick access to features.
+
+![Dashboard Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Dashboard.jpg)
+
+---
+
+### Gradebook Navigation
+Allows users to track grades and academic performance.
+
+![Gradebook Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Gradebook.jpg)
+
+---
+
+### Calendar Usage
+Displays schedules, deadlines, and upcoming activities.
+
+![Calendar Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Calendar.jpg)
+
+---
+
+### Backlog / Task Manager
+Helps users organize pending academic tasks.
+
+![Backlog Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Backlog.jpg)
 
 ## Features of the Program
 - **User Authentication** – Secure login using Moodle credentials  
