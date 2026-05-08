@@ -79,7 +79,6 @@ Shows user authentication using Moodle credentials.
 <p align="center">
   <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Login.jpg" width="300"/>
 </p>
----
 
 ### Sign Up Screen
 Allows new users to create an account and initialize local storage.
@@ -87,7 +86,6 @@ Allows new users to create an account and initialize local storage.
 <p align="center">
   <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Signup.jpg" width="300"/>
 </p>
----
 
 ### Dashboard Overview
 Displays enrolled courses and quick access to features.
@@ -96,7 +94,6 @@ Displays enrolled courses and quick access to features.
   <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Dashboard.jpg" width="300"/>
 </p>
 
----
 
 ### Gradebook Navigation
 Allows users to track grades and academic performance.
@@ -104,7 +101,6 @@ Allows users to track grades and academic performance.
 <p align="center">
   <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Gradebook.jpg" width="300"/>
 </p>
----
 
 ### Calendar Usage
 Displays schedules, deadlines, and upcoming activities.
@@ -112,7 +108,6 @@ Displays schedules, deadlines, and upcoming activities.
 <p align="center">
   <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Calendar.jpg" width="300"/>
 </p>
----
 
 ### Backlog / Task Manager
 Helps users organize pending academic tasks.
