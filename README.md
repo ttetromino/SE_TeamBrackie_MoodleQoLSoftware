@@ -76,42 +76,50 @@ Before using Moodle+, you must have:
 ### Login Screen
 Shows user authentication using Moodle credentials.
 
-![Login Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Login.jpg)
-
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Login.jpg" width="300"/>
+</p>
 ---
 
 ### Sign Up Screen
 Allows new users to create an account and initialize local storage.
 
-![Signup Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Signup.jpg)
-
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Signup.jpg" width="300"/>
+</p>
 ---
 
 ### Dashboard Overview
 Displays enrolled courses and quick access to features.
 
-![Dashboard Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Dashboard.jpg)
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Dashboard.jpg" width="300"/>
+</p>
 
 ---
 
 ### Gradebook Navigation
 Allows users to track grades and academic performance.
 
-![Gradebook Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Gradebook.jpg)
-
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Gradebook.jpg" width="300"/>
+</p>
 ---
 
 ### Calendar Usage
 Displays schedules, deadlines, and upcoming activities.
 
-![Calendar Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Calendar.jpg)
-
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Calendar.jpg" width="300"/>
+</p>
 ---
 
 ### Backlog / Task Manager
 Helps users organize pending academic tasks.
 
-![Backlog Screenshot](https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Backlog.jpg)
+<p align="center">
+  <img src="https://github.com/ttetromino/SE_TeamBrackie_MoodleQoLSoftware/blob/main/src/business/pictures/Backlog.jpg" width="300"/>
+</p>
 
 ## Features of the Program
 - **User Authentication** – Secure login using Moodle credentials  
