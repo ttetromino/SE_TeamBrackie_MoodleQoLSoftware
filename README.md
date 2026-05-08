@@ -192,16 +192,24 @@ This design aligns with the **Philippine Data Privacy Act (RA 10173)**.
 - Use GitHub Discussions or Issues for communication  
 
 
-## Development Status
-This project is currently under active development. Features may evolve over time.
+## Design Principles Applied 1. 
+*Separation of Concerns (SoC)* 
 
----
+The team has strictly separated the Data Acquisition layer from the Presentation layer. By using the Web Extension as an exclusive bridge for fetching data, the core productivity features (like the GWA calculator and Task Manager) remain independent of the Moodle server's unstable connectivity. This ensures that even if the Moodle site is slow, the user's local productivity dashboard remains functional. 
 
-## Repository Structure
-├── docs/Documentation
-│ └── architecture/Architecture diagrams
-├── src/Source code
-├── test/Test files
-├── .github/workflows/CI/CD workflows
-├── README.md
-└── LICENSE
+2. *Security by Design (Local-Only Policy)*
+3. To address the risk of credential theft, the architecture applies a strict "Local-Only" data principle.
+*No External Database: Unlike traditional web apps, this system does not maintain a centralized database for student data.*
+
+* Encryption: All sensitive academic records are encrypted and stored solely within the user's browser environment. This minimizes the attack surface and ensures compliance with the Philippine Data Privacy Act (RA10173).
+
+## Development Status 
+This project is currently under active development. Features and architecture may evolve as the project progresses. 
+
+## Repository Structure The repository is organized to clearly separate source code, documentation, and configuration files: #### ├── docs/ Project documentation 
+#### │ └─ architecture/ Architecture diagrams and explanations 
+#### ├── src/ Source code 
+#### ├── test/ Test files 
+#### ├── .github/workflows/ CI/CD workflows 
+#### ├── README.md Project overview 
+#### └── LICENSE
