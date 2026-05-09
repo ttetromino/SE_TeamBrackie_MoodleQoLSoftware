@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/grade_model.dart';
-
+import '../config/api_config.dart';
 class GradeService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
   static const String cachedGradesKey = 'cached_grades';
   static const String cachedSummaryKey = 'cached_grade_summary';
   static const String lastUpdatedKey = 'grades_last_updated';

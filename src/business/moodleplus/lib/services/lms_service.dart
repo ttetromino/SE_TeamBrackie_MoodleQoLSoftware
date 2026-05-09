@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../config/api_config.dart';
 class LMSService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   final String userId;
 

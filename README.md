@@ -1,5 +1,11 @@
 # MoodlePlus
-**Moodle+** is a web extension and application to enhance the productivity and well-being of students. It addresses Moodle LMS limitations such as slow server response and lack of integrated planning tools.
+**Moodle+** is a web extension + local app to enhance the Moodle LMS experience by providing task planning, and encrypted local data storage productivity and well-being of students, it addresses Moodle LMS limitations such as slow server response.
+
+## Objectives
+- Improve Moodle usability and quality of life features
+- Enable offline access to previously loaded data
+- Ensure user data privacy through local encrypted storage
+- Follow clean architecture and documentation standards
 
 ## Features of the Program
 * **Account Creation**: The program will allow for new users to create their account, which is used to save limited data.
@@ -46,8 +52,9 @@ Duration: 1 Week
 * Production Deployment
 
 ## System Architecture
+The system follows a **Hybrid Client-Side (Thick Client) Architecture** where most application logic runs on the user’s device through a browser extension or client application.
 
-#### MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. The system is divided into four main layers:
+### MoodlePlus follows a **layered architecture design** to ensure separation of concerns, scalability, and maintainability. The system is divided into four main layers:
 ---
 ### 1. Presentation Layer
 This layer represents the **Main App Interface**, where users interact with the system.
@@ -168,3 +175,16 @@ To address the risk of credential theft, the architecture applies a strict "Loca
 
 * No External Database: Unlike traditional web apps, this system does not maintain a centralized database for student data.
 * Encryption: All sensitive academic records are encrypted and stored solely within the user's browser environment. This minimizes the attack surface and ensures compliance with the Philippine Data Privacy Act (RA10173).
+
+## 🚀 Development Status
+This project is currently under active development. Features and architecture may evolve as the project progresses.
+
+## Repository Structure
+The repository is organized to clearly separate source code, documentation, and configuration files:
+#### ├── docs/ Project documentation
+#### │ └── architecture/ Architecture diagrams and explanations
+#### ├── src/ Source code
+#### ├── test/ Test files
+#### ├── .github/workflows/  CI/CD workflows
+#### ├── README.md Project overview
+#### └── LICENSE

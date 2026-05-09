@@ -4,9 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'course_service.dart';
-
+import '../config/api_config.dart';
 class BacklogService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Sync backlog from LMS
   Future<int> syncBacklog(String email) async {

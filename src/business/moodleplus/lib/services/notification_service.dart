@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api_config.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -73,7 +74,7 @@ class NotificationService {
     // Also save to backend
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:5000/api/notifications/preference'),
+        Uri.parse('${ApiConfig.baseUrl}/api/notifications/preference'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -110,7 +111,7 @@ class NotificationService {
     try {
       // Get pending notifications from backend
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:5000/api/notifications/pending/$email'),
+        Uri.parse('${ApiConfig.baseUrl}/api/notifications/pending/$email'),
       );
 
       if (response.statusCode != 200) return;
@@ -147,7 +148,7 @@ class NotificationService {
 
         // Mark as sent in backend
         await http.post(
-          Uri.parse('http://10.0.2.2:5000/api/notifications/mark-sent'),
+          Uri.parse('${ApiConfig.baseUrl}/api/notifications/mark-sent'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             'itemId': notif['itemId'],

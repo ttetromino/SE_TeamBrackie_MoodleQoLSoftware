@@ -1,9 +1,10 @@
 // lib/services/course_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import '../config/api_config.dart';
 class CourseService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Get all stored courses from database
   Future<List<StoredCourse>> getStoredCourses(String email) async {
