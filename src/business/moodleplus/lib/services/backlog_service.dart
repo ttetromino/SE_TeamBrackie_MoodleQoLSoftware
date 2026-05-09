@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'course_service.dart';
+import '../config/api_config.dart';
 class BacklogService {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Sync backlog from LMS
   Future<int> syncBacklog(String email) async {
@@ -20,8 +22,9 @@ class BacklogService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        print('✅ Synced ${data['count']} backlog items');
-        return data['count'];
+        final count = data['count'] ?? 0;
+        print('✅ Synced $count backlog items');
+        return count;
       }
       return 0;
     } catch (e) {
@@ -84,21 +87,80 @@ class BacklogService {
   }
 
   // Mark item as completed
-  Future<bool> completeItem(String itemId, String email) async {
+  Future<bool> completeItem(String itemId, String email, {BacklogItem? item}) async {
     try {
-      final response = await http.put(
-        Uri.parse('$baseUrl/api/backlog/complete/$itemId'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email}),
+      if (item == null) {
+        print('❌ No item data provided, cannot complete');
+        return false;
+      }
+
+      print('📝 Marking backlog item complete: ${item.activityName}');
+
+      final courseService = CourseService();
+      final result = await courseService.markActivityComplete(
+        email: email,
+        courseId: item.courseId,
+        activityId: item.activityId,
+        isCompleted: true,
       );
 
-      final data = jsonDecode(response.body);
-      return response.statusCode == 200 && data['success'] == true;
+      if (result['success'] == true) {
+        final response = await http.put(
+          Uri.parse('$baseUrl/api/backlog/complete/$itemId'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email}),
+        );
+
+        print('✅ Backlog item completed and course activity updated');
+        return true;
+      }
+      return false;
     } catch (e) {
       print('Complete item error: $e');
       return false;
     }
   }
+
+// Add this helper method to get a single backlog item
+  Future<BacklogItem?> getBacklogItem(String itemId, String email) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/backlog/item/$itemId?email=$email'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return BacklogItem.fromJson(data['item']);
+      }
+      return null;
+    } catch (e) {
+      print('Get backlog item error: $e');
+      return null;
+    }
+  }
+
+  // Mark backlog item as complete by activity ID and course ID
+  Future<bool> completeBacklogItemByActivity(String email, String courseId, String activityId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/backlog/complete-by-activity'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'courseId': courseId,
+          'activityId': activityId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      return response.statusCode == 200 && data['success'] == true;
+    } catch (e) {
+      print('Complete backlog item by activity error: $e');
+      return false;
+    }
+  }
+
+
 
   // Save layout preference
   Future<bool> saveLayoutPreference(String email, String layoutMode) async {
@@ -208,7 +270,7 @@ class BacklogItem {
     );
   }
 
-  // Calculate time remaining
+  // Calculate time remaining or past due
   Duration? get timeRemaining {
     if (dueDate == null) return null;
     final now = DateTime.now();
@@ -216,19 +278,27 @@ class BacklogItem {
     return dueDate!.difference(now);
   }
 
-  // Format time remaining as HH:MM
+  // Format time remaining or past due message
   String get formattedTimeRemaining {
     if (dueDate == null) return 'No deadline';
-    final remaining = timeRemaining;
-    if (remaining == null) return 'Past due';
-    if (remaining.isNegative) return 'Past due';
 
+    final now = DateTime.now();
+    if (dueDate!.isBefore(now)) {
+      final daysPast = now.difference(dueDate!).inDays;
+      if (daysPast == 0) {
+        final hoursPast = now.difference(dueDate!).inHours;
+        return 'Due ${hoursPast} hour${hoursPast != 1 ? 's' : ''} ago';
+      }
+      return 'Due $daysPast day${daysPast != 1 ? 's' : ''} ago';
+    }
+
+    final remaining = dueDate!.difference(now);
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes.remainder(60);
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
   }
 
-  // Get urgency color based on priority and time remaining
+  // Get urgency color based on priority
   Color get urgencyColor {
     if (isCompleted) return Colors.grey;
 
@@ -241,6 +311,8 @@ class BacklogItem {
         return Colors.amber;
       case 'low':
         return Colors.green;
+      case 'past_due':
+        return Colors.red.shade700;
       default:
         return Colors.grey;
     }
@@ -257,6 +329,8 @@ class BacklogItem {
         return 'Medium Priority';
       case 'low':
         return 'Low Priority';
+      case 'past_due':
+        return 'Past Due';
       default:
         return 'No Deadline';
     }
@@ -278,3 +352,4 @@ class BacklogItem {
     }
   }
 }
+

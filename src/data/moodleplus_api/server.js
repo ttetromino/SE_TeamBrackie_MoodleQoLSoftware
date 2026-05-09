@@ -1,13 +1,15 @@
-// server.js (updated routes section)
+// server.js
 const express = require('express');
 require('dotenv').config();
 
 const connectDB = require('./config/db');
 const { startSessionCleanup } = require('./utils/sessionStore');
+const User = require('./models/User');  // ADD THIS LINE
 
-const { 
-  signup, 
-  login, 
+
+const {
+  signup,
+  login,
   updateLMSCredentials,
   autoLoginLMS,
   enableBiometricLogin,
@@ -16,16 +18,38 @@ const {
   getBiometricStatus,
   changeAppPassword,
   updateEmail,
-  updateProfilePicture
+  updateProfilePicture,
+  addPersonalEvent,
+  getPersonalEvents,
+  deletePersonalEvent,
+  updatePersonalEvent
 } = require('./controllers/authController');
 
-const { 
-  lmsLogin, 
+const {
+  lmsLogin,
   verifyLMSCredentials,
-  getCourses, 
+  getCourses,
   getCourseContents,
-  changeLMSPassword 
+  changeLMSPassword,
+  getGrades,
+  getCourseDetailedGrades,
+  getCalendarEvents
 } = require('./controllers/lmsController');
+
+// Course controllers - only import what exists
+const {
+  getStoredCourses,
+  getStoredCourse,
+  getCourseContentsFromDB,
+  updateActivityCompletion,
+  getCourseStats,
+  triggerBackgroundSync,
+  syncAllCourses,
+  syncCourseToDatabase,
+  syncCourseById,
+  updateActivityByUrl,
+
+} = require('./controllers/courseController');
 
 // US-04: Archive controllers
 const {
@@ -39,13 +63,47 @@ const {
 const {
   syncBacklog,
   getBacklogItems,
+  getBacklogItem,
   togglePin,
   completeItem,
   saveLayoutPreference,
-  getLayoutPreference
+  getLayoutPreference,
+  completeItemByActivity
 } = require('./controllers/backlogController');
+
+const {
+  getPendingNotifications,
+  markNotificationSent,
+  saveNotificationPreference,
+  getNotificationPreference
+} = require('./controllers/notificationController');
+
+const { requireAdmin } = require('./middleware/adminAuth');
+const {
+  getScraperStatus,
+  getStorageStats,
+  getAllUsers,
+  getUserDetails,
+  getUserCourses,
+  getUserBacklog,
+  forceUserSync,
+  removeUser
+} = require('./controllers/adminController');
+
+
 const app = express();
 app.use(express.json());
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-user-id');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 
 // Connect to MongoDB
 connectDB();
@@ -60,12 +118,13 @@ app.post('/api/lms/login', lmsLogin);
 app.post('/api/lms/verify', verifyLMSCredentials);
 app.post('/api/lms/auto-login', autoLoginLMS);
 app.post('/api/lms/courses', getCourses);
-app.post('/api/lms/course-contents', getCourseContents); 
+app.post('/api/lms/course-contents', getCourseContents);
 app.put('/api/user/lms-credentials', updateLMSCredentials);
 app.post('/api/lms/change-password', changeLMSPassword);
 app.post('/api/user/change-password', changeAppPassword);
 app.put('/api/user/email', updateEmail);
 app.put('/api/user/profile-picture', updateProfilePicture);
+app.put('/api/backlog/complete-by-activity', completeItemByActivity);
 
 // Biometric routes
 app.post('/api/biometric/enable', enableBiometricLogin);
@@ -80,8 +139,12 @@ app.get('/api/archive/course/:email/:courseId', getArchivedCourseDetails);
 app.post('/api/archive/restore', restoreArchivedCourse);
 app.delete('/api/archive/course', deleteArchivedCourse);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Grade routes
+app.post('/api/lms/grades', getGrades);
+app.post('/api/lms/course-grades', getCourseDetailedGrades);
+
+// Calendar routes
+app.post('/api/lms/calendar', getCalendarEvents);
 
 // US-13: Backlog routes
 app.post('/api/backlog/sync', syncBacklog);
@@ -90,6 +153,76 @@ app.put('/api/backlog/pin/:itemId', togglePin);
 app.put('/api/backlog/complete/:itemId', completeItem);
 app.post('/api/backlog/layout', saveLayoutPreference);
 app.get('/api/backlog/layout/:email', getLayoutPreference);
+app.get('/api/backlog/item/:itemId', getBacklogItem);
+
+// Personal events routes
+app.post('/api/user/personal-event', addPersonalEvent);
+app.get('/api/user/personal-events/:email', getPersonalEvents);
+app.delete('/api/user/personal-event/:eventId', deletePersonalEvent);
+app.put('/api/user/personal-event/:eventId', updatePersonalEvent);
+
+// Course storage routes - FIXED: only use existing functions
+app.get('/api/course/stored/:email', getStoredCourses);
+app.get('/api/course/stored/:email/:courseId', getStoredCourse);
+app.get('/api/course/contents/:email/:courseId', getCourseContentsFromDB);
+app.put('/api/course/activity-complete', updateActivityCompletion);
+app.get('/api/course/stats/:email', getCourseStats);
+app.post('/api/course/sync-background', triggerBackgroundSync);
+app.post('/api/course/sync', syncCourseToDatabase);
+app.post('/api/course/sync-all', syncAllCourses);
+app.post('/api/course/sync-by-id', syncCourseById);
+app.put('/api/course/activity-complete-by-url', updateActivityByUrl);
+app.get('/api/notifications/pending/:email', getPendingNotifications);
+app.post('/api/notifications/mark-sent', markNotificationSent);
+app.get('/api/notifications/preference/:email', getNotificationPreference);
+app.post('/api/notifications/preference', saveNotificationPreference);
+
+// ============================================
+// US-12: ADMIN ROUTES
+// ============================================
+
+// Admin authorization check (for verifying admin status)
+app.get('/api/admin/verify/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.json({ success: false, isAdmin: false });
+    }
+
+    console.log(`🔐 Admin verify for ${email}: role=${user.role}`);
+
+    res.json({
+      success: true,
+      isAdmin: user.role === 'admin',
+      role: user.role
+    });
+  } catch (error) {
+    console.error('Admin verify error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// All routes below require admin role
+app.use('/api/admin', requireAdmin);
+
+// Scraper health & connectivity
+app.get('/api/admin/scraper-status', getScraperStatus);
+
+// Storage statistics
+app.get('/api/admin/storage-stats', getStorageStats);
+
+// User management
+app.get('/api/admin/users', getAllUsers);
+app.get('/api/admin/users/:email', getUserDetails);
+app.get('/api/admin/users/:email/courses', getUserCourses);
+app.get('/api/admin/users/:email/backlog', getUserBacklog);
+
+// Admin actions
+app.post('/api/admin/force-sync', forceUserSync);
+app.delete('/api/admin/users', removeUser);
+
 // Test route
 app.get('/', (req, res) => {
   res.json({ message: 'Server is running' });

@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'config/api_config.dart';
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic> user;
   final Function(Map<String, dynamic>) onProfileUpdated;
@@ -23,7 +23,8 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  static const String baseUrl = 'http://10.0.2.2:5000';
+
+  static const String baseUrl = ApiConfig.baseUrl;
 
   // Controllers
   final TextEditingController _nameController = TextEditingController();

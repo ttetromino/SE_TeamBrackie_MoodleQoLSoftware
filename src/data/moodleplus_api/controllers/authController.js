@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { createLMSClient } = require('../utils/lmsClient');
 const { userSessions } = require('../utils/sessionStore');
+const cheerio = require('cheerio');
 
 // Signup with required LMS credentials
 const signup = async (req, res) => {
@@ -162,55 +163,116 @@ const autoLoginLMS = async (req, res) => {
     }
 
     // If no in-memory session, try to restore from database
-    console.log('Trying to restore session from database');
+    console.log('🔄 Trying to restore session from database');
     const user = await User.findOne({ email: userId });
-    
+
     if (user && user.lmsCookies && user.lmsCookies.length > 0) {
       console.log(`Found ${user.lmsCookies.length} stored cookies`);
-      
+
       // Check if session hasn't expired
-      if (user.lmsSessionExpiry) {
-        const now = new Date();
-        const expiry = new Date(user.lmsSessionExpiry);
-        console.log(`Session expiry: ${expiry}, Current: ${now}`);
-        
-        if (now < expiry) {
-          console.log('⏳ Session not expired, attempting to use');
-          // Try to use stored cookies
-          const client = createLMSClient(user.lmsCookies);
-          try {
-            const dashboard = await client.get('https://uphslms.com/my/', {
-              timeout: 10000
+      if (user.lmsSessionExpiry && new Date() < new Date(user.lmsSessionExpiry)) {
+        console.log(`Session expiry: ${user.lmsSessionExpiry}, Current: ${new Date()}`);
+        console.log('⏳ Session not expired, attempting to use');
+
+        // Try to use stored cookies
+        const client = createLMSClient(user.lmsCookies);
+        try {
+          const dashboard = await client.get('https://uphslms.com/my/', {
+            timeout: 10000
+          });
+          if (!dashboard.data.includes('Log in')) {
+            console.log('Restored session from database');
+            userSessions.set(userId, {
+              cookies: user.lmsCookies,
+              timestamp: Date.now(),
+              username: user.lmsUsername
             });
-            if (!dashboard.data.includes('Log in')) {
-              console.log('Restored session from database');
-              
-              // Restore to in-memory storage
-              userSessions.set(userId, {
-                cookies: user.lmsCookies,
-                timestamp: Date.now(),
-                username: user.lmsUsername
-              });
-              
-              return res.json({ success: true });
-            } else {
-              console.log('Stored cookies are invalid');
-            }
-          } catch (e) {
-            console.log('Error using stored cookies:', e.message);
+            return res.json({ success: true });
+          } else {
+            console.log('Stored cookies are invalid - will attempt fresh login');
+            // Clear invalid cookies from database
+            await User.findOneAndUpdate(
+              { email: userId },
+              { $set: { lmsCookies: [], lmsSessionExpiry: null } }
+            );
           }
-        } else {
-          console.log('Session expired in database');
+        } catch (e) {
+          console.log('Error using stored cookies:', e.message);
+          // Clear invalid cookies from database
+          await User.findOneAndUpdate(
+            { email: userId },
+            { $set: { lmsCookies: [], lmsSessionExpiry: null } }
+          );
         }
       } else {
-        console.log('No expiry date in database');
+        console.log('Session expired in database, clearing...');
+        await User.findOneAndUpdate(
+          { email: userId },
+          { $set: { lmsCookies: [], lmsSessionExpiry: null } }
+        );
       }
-    } else {
-      console.log('No stored cookies found for user');
     }
 
-    // No valid session
-    console.log('No valid session found');
+    // Try to login fresh using stored LMS credentials
+    if (user && user.lmsUsername && user.lmsPassword) {
+      console.log('🔄 Attempting fresh login with stored credentials...');
+      const client = createLMSClient();
+      const loginUrl = 'https://uphslms.com/login/index.php';
+
+      try {
+        const loginPage = await client.get(loginUrl);
+        let $ = cheerio.load(loginPage.data);
+        const logintoken = $('input[name="logintoken"]').val();
+
+        await client.post(loginUrl,
+          new URLSearchParams({
+            username: user.lmsUsername,
+            password: user.lmsPassword,
+            logintoken: logintoken,
+            anchor: ''
+          }), {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Origin': 'https://uphslms.com/',
+              'Referer': loginUrl
+            }
+          });
+
+        const dashboard = await client.get('https://uphslms.com/my/');
+        if (!dashboard.data.includes('Log in')) {
+          console.log('✅ Fresh login successful!');
+
+          const cookies = await client.defaults.jar.getCookies('https://uphslms.com');
+          const cookieStrings = cookies.map(c => c.cookieString());
+
+          userSessions.set(userId, {
+            cookies: cookieStrings,
+            timestamp: Date.now(),
+            username: user.lmsUsername
+          });
+
+          await User.findOneAndUpdate(
+            { email: userId },
+            {
+              lmsCookies: cookieStrings,
+              lmsSessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+              lmsLastLogin: new Date()
+            }
+          );
+
+          console.log('✅ Session created and stored');
+          return res.json({ success: true });
+        } else {
+          console.log('❌ Fresh login failed - invalid credentials');
+          return res.json({ success: false, message: 'Invalid LMS credentials' });
+        }
+      } catch (loginError) {
+        console.error('Fresh login error:', loginError.message);
+        return res.json({ success: false, message: 'Login failed' });
+      }
+    }
+
+    console.log('No valid session and no stored credentials');
     res.json({ success: false, message: 'No valid session' });
     
   } catch (error) {
@@ -336,19 +398,17 @@ const changeAppPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     // Verify current password
     const isValid = await user.comparePassword(currentPassword);
     if (!isValid) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
-    
-    // Hash and save new password
-    const bcrypt = require('bcrypt');
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
-    await user.save();
-    
+
+    // Set the new password directly (pre-save hook will hash it)
+    user.password = newPassword;
+    await user.save();  // This triggers the pre('save') hook
+
     res.json({ success: true, message: 'App password changed successfully' });
   } catch (err) {
     console.error('Change app password error:', err);
@@ -429,6 +489,149 @@ const updateProfilePicture = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+const addPersonalEvent = async (req, res) => {
+  try {
+    const { email, event } = req.body;
+
+    console.log('📝 Adding personal event for:', email);
+    console.log('   Event:', event.title);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const newEvent = {
+      id: event.id || Date.now().toString(),
+      title: event.title,
+      description: event.description || '',
+      date: new Date(event.date),
+      timeHour: event.timeHour || null,
+      timeMinute: event.timeMinute || null,
+      isAllDay: event.isAllDay ?? true,
+      courseName: event.courseName || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    user.personalEvents.push(newEvent);
+    await user.save();
+
+    console.log('✅ Personal event added successfully');
+    res.json({
+      success: true,
+      message: 'Personal event added',
+      event: newEvent
+    });
+
+  } catch (err) {
+    console.error('Add personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Get all personal events
+const getPersonalEvents = async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    console.log('📋 Fetching personal events for:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const events = user.personalEvents.sort((a, b) => a.date - b.date);
+
+    res.json({
+      success: true,
+      events: events
+    });
+
+  } catch (err) {
+    console.error('Get personal events error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Delete personal event
+const deletePersonalEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { email } = req.body;
+
+    console.log('🗑️ Deleting personal event:', eventId, 'for user:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const eventIndex = user.personalEvents.findIndex(e => e.id === eventId);
+    if (eventIndex === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    user.personalEvents.splice(eventIndex, 1);
+    await user.save();
+
+    console.log('✅ Personal event deleted');
+    res.json({
+      success: true,
+      message: 'Personal event deleted'
+    });
+
+  } catch (err) {
+    console.error('Delete personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// US-11: Update personal event
+const updatePersonalEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { email, event } = req.body;
+
+    console.log('✏️ Updating personal event:', eventId, 'for user:', email);
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const eventIndex = user.personalEvents.findIndex(e => e.id === eventId);
+    if (eventIndex === -1) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    user.personalEvents[eventIndex] = {
+      ...user.personalEvents[eventIndex],
+      title: event.title,
+      description: event.description,
+      date: new Date(event.date),
+      timeHour: event.timeHour,
+      timeMinute: event.timeMinute,
+      isAllDay: event.isAllDay,
+      courseName: event.courseName,
+      updatedAt: new Date()
+    };
+
+    await user.save();
+
+    console.log('✅ Personal event updated');
+    res.json({
+      success: true,
+      message: 'Personal event updated',
+      event: user.personalEvents[eventIndex]
+    });
+
+  } catch (err) {
+    console.error('Update personal event error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
 module.exports = { 
   signup, 
   login, 
@@ -440,5 +643,9 @@ module.exports = {
   getBiometricStatus,
   changeAppPassword,
   updateEmail,        
-  updateProfilePicture
+  updateProfilePicture,
+  addPersonalEvent,
+  getPersonalEvents,
+  deletePersonalEvent,
+  updatePersonalEvent
 };
