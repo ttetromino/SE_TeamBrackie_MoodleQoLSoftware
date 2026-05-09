@@ -8,6 +8,8 @@ import 'services/biometric_service.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
+import 'config/api_config.dart';
+
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
 
@@ -108,7 +110,7 @@ class _SignupPageState extends State<SignupPage> {
       String lmsUsername,
       String lmsPassword,
       ) async {
-    final Uri url = Uri.parse('http://10.0.2.2:5000/users');
+    final Uri url = Uri.parse('${ApiConfig.baseUrl}/users');
 
     Map<String, dynamic> requestBody = {
       'name': name,
@@ -140,7 +142,7 @@ class _SignupPageState extends State<SignupPage> {
         print('🔄 Auto-logging in...');
 
         final loginResponse = await http.post(
-          Uri.parse('http://10.0.2.2:5000/login'),
+          Uri.parse('${ApiConfig.baseUrl}/login'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'email': email, 'password': password}),
         );
@@ -226,7 +228,7 @@ class _SignupPageState extends State<SignupPage> {
     try {
       print('Verifying LMS credentials...');
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:5000/api/lms/verify'),
+        Uri.parse('${ApiConfig.baseUrl}/api/lms/verify'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': username, 'password': password}),
       );

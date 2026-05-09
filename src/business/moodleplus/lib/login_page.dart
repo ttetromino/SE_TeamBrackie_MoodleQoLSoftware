@@ -8,6 +8,7 @@ import 'home_page.dart';
 import 'signup_page.dart';
 import 'services/biometric_service.dart';
 import 'package:local_auth/local_auth.dart';
+import 'config/api_config.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,8 +30,8 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    emailController.text = 'lloydtest21@gmail.com';
-    passwordController.text = 'lloydtest21';
+    emailController.text = '';
+    passwordController.text = '';
     _checkBiometricAndAutoLogin();
   }
 
@@ -199,15 +200,22 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => loading = true);
 
-    final Uri url = Uri.parse('http://10.0.2.2:5000/login');
+    final Uri url = Uri.parse('${ApiConfig.baseUrl}/login');
+
+    print('🔄 Attempting login to: $url');
+
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 30));
+
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
 
       final data = jsonDecode(response.body);
+
       if (response.statusCode == 200) {
         if (!mounted) return;
 
@@ -241,11 +249,25 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       print('❌ Login error: $e');
+
+      // Show specific error message
+      String errorMsg = 'Connection failed. ';
+      if (e.toString().contains('SocketException')) {
+        errorMsg = 'Cannot connect to server. Please check your internet connection.';
+      } else if (e.toString().contains('TimeoutException')) {
+        errorMsg = 'Server is taking too long to respond. Please try again.';
+      } else if (e.toString().contains('Failed host lookup')) {
+        errorMsg = 'Cannot resolve server address. Please check your internet connection.';
+      } else {
+        errorMsg = 'Error: $e';
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Connection error: $e'),
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
         ),
       );
       setState(() => loading = false);
